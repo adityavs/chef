@@ -17,12 +17,12 @@
 # limitations under the License.
 #
 
-require 'chef/mixin/convert_to_class_name'
 require 'chef/exceptions'
 require 'chef/mixin/shell_out'
 require 'chef/mixin/powershell_out'
 require 'chef/dsl/resources'
 require 'chef/dsl/definitions'
+require 'chef/dsl/declare_resource'
 
 class Chef
   module DSL
@@ -128,7 +128,6 @@ end
 
 # Avoid circular references for things that are only used in instance methods
 require 'chef/resource'
-require 'chef/dsl/declare_resource'
 
 # **DEPRECATED**
 # This used to be part of chef/mixin/recipe_definition_dsl_core. Load the file to activate the deprecation code.
