@@ -17,6 +17,8 @@
 # limitations under the License.
 #
 
+require 'chef/exceptions'
+
 class Chef
   module DSL
     module DeclareResource
@@ -86,6 +88,9 @@ class Chef
       #
       def build_resource(type, name, created_at=nil, run_context: self.run_context, &resource_attrs_block)
         created_at ||= caller[0]
+        Thread.exclusive do
+          require 'chef/resource_builder' unless defined?(Chef::ResourceBuilder)
+        end
 
         Chef::ResourceBuilder.new(
           type:                type,
@@ -101,6 +106,3 @@ class Chef
     end
   end
 end
-
-# Avoid circular references for things that are only used in instance methods
-require 'chef/resource_builder'
