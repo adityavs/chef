@@ -1,6 +1,6 @@
 #
 # Author:: Mukta Aphale (<mukta.aphale@clogeny.com>)
-# Copyright:: Copyright (c) 2013-2015 Chef Software, Inc.
+# Copyright:: Copyright 2013-2016, Chef Software, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,25 +15,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require 'spec_helper'
+require "spec_helper"
 if Chef::Platform.windows?
-  require 'chef/application/windows_service'
+  require "chef/application/windows_service"
 end
 
 describe "Chef::Application::WindowsService", :windows_only do
-  let(:shell_out_result) { double('shellout', stdout: nil, stderr: nil) }
+  let(:shell_out_result) { double("shellout", stdout: nil, stderr: nil) }
   let(:config_options) do
     {
       log_location: STDOUT,
       config_file: "test_config_file",
-      log_level: :info
+      log_level: :info,
     }
   end
   let(:timeout) { 7200 }
   let(:shellout_options) do
     {
       :timeout => timeout,
-      :logger => Chef::Log
+      :logger => Chef::Log,
     }
   end
 
@@ -51,19 +51,19 @@ describe "Chef::Application::WindowsService", :windows_only do
 
   it "passes DEFAULT_LOG_LOCATION to chef-client instead of STDOUT" do
     expect(subject).to receive(:shell_out).with(
-      "chef-client  --no-fork -c test_config_file -L #{Chef::Application::WindowsService::DEFAULT_LOG_LOCATION}",
+      "chef-client.bat  --no-fork -c test_config_file -L #{Chef::Application::WindowsService::DEFAULT_LOG_LOCATION}",
       shellout_options
     ).and_return(shell_out_result)
     subject.service_main
   end
 
-  context 'has a log location configured' do
-    let(:tempfile) { Tempfile.new 'log_file' }
+  context "has a log location configured" do
+    let(:tempfile) { Tempfile.new "log_file" }
     let(:config_options) do
       {
         log_location: tempfile.path,
         config_file: "test_config_file",
-        log_level: :info
+        log_level: :info,
       }
     end
 
@@ -73,24 +73,24 @@ describe "Chef::Application::WindowsService", :windows_only do
 
     it "uses the configured log location" do
       expect(subject).to receive(:shell_out).with(
-        "chef-client  --no-fork -c test_config_file -L #{tempfile.path}",
+        "chef-client.bat  --no-fork -c test_config_file -L #{tempfile.path}",
         shellout_options
       ).and_return(shell_out_result)
       subject.service_main
     end
 
-    context 'configured to Event Logger' do
+    context "configured to Event Logger" do
       let(:config_options) do
         {
           log_location: Chef::Log::WinEvt.new,
           config_file: "test_config_file",
-          log_level: :info
+          log_level: :info,
         }
       end
 
       it "does not pass log location to new process" do
         expect(subject).to receive(:shell_out).with(
-          "chef-client  --no-fork -c test_config_file",
+          "chef-client.bat  --no-fork -c test_config_file",
           shellout_options
         ).and_return(shell_out_result)
         subject.service_main
@@ -98,7 +98,7 @@ describe "Chef::Application::WindowsService", :windows_only do
     end
   end
 
-  context 'configueres a watchdog timeout' do
+  context "configueres a watchdog timeout" do
     let(:timeout) { 10 }
 
     before do
@@ -107,7 +107,7 @@ describe "Chef::Application::WindowsService", :windows_only do
 
     it "passes watchdog timeout to new process" do
       expect(subject).to receive(:shell_out).with(
-        "chef-client  --no-fork -c test_config_file -L #{Chef::Application::WindowsService::DEFAULT_LOG_LOCATION}",
+        "chef-client.bat  --no-fork -c test_config_file -L #{Chef::Application::WindowsService::DEFAULT_LOG_LOCATION}",
         shellout_options
       ).and_return(shell_out_result)
       subject.service_main

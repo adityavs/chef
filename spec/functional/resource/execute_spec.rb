@@ -1,6 +1,6 @@
 #
-# Author:: Serdar Sutay (<serdar@opscode.com>)
-# Copyright:: Copyright (c) 2014 Opscode, Inc.
+# Author:: Serdar Sutay (<serdar@chef.io>)
+# Copyright:: Copyright 2014-2017, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,16 +16,16 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
-require 'functional/resource/base'
-require 'timeout'
+require "spec_helper"
+require "functional/resource/base"
+require "timeout"
 
 describe Chef::Resource::Execute do
-  let(:resource) {
+  let(:resource) do
     resource = Chef::Resource::Execute.new("foo_resource", run_context)
     resource.command("echo hello")
     resource
-  }
+  end
 
   describe "when guard is ruby block" do
     it "guard can still run" do
@@ -41,17 +41,17 @@ describe Chef::Resource::Execute do
     end
 
     let(:guard) { "ruby -e 'exit 0'" }
-    let!(:guard_resource) {
+    let!(:guard_resource) do
       interpreter = Chef::GuardInterpreter::ResourceGuardInterpreter.new(resource, guard, nil)
       interpreter.send(:get_interpreter_resource, resource)
-    }
+    end
 
     it "executes the guard and not the regular resource" do
       expect_any_instance_of(Chef::GuardInterpreter::ResourceGuardInterpreter).to receive(:get_interpreter_resource).and_return(guard_resource)
 
       # why_run mode doesn't disable the updated_by_last_action logic, so we really have to look at the provider action
       # to see if why_run correctly disabled the resource.  It should shell_out! for the guard but not the resource.
-      expect_any_instance_of(Chef::Provider::Execute).to receive(:shell_out!).once
+      expect_any_instance_of(Chef::Provider::Execute).to receive(:shell_out_with_systems_locale!).once
 
       resource.only_if guard
       resource.run_action(:run)
@@ -106,7 +106,7 @@ describe Chef::Resource::Execute do
 
     it "guard adds additional values in its :environment and runs" do
       resource.only_if %{ruby -e 'exit 1 if ENV["SGCE_SECRET"] != "regularsecret"'}, {
-        :environment => { 'SGCE_SECRET' => "regularsecret" }
+        :environment => { "SGCE_SECRET" => "regularsecret" },
       }
       resource.run_action(:run)
       expect(resource).to be_updated_by_last_action
@@ -114,7 +114,7 @@ describe Chef::Resource::Execute do
 
     it "guard adds additional values in its :environment and does not run" do
       resource.only_if %{ruby -e 'exit 1 if ENV["SGCE_SECRET"] == "regularsecret"'}, {
-        :environment => { 'SGCE_SECRET' => "regularsecret" }
+        :environment => { "SGCE_SECRET" => "regularsecret" },
       }
       resource.run_action(:run)
       expect(resource).not_to be_updated_by_last_action
@@ -122,7 +122,7 @@ describe Chef::Resource::Execute do
 
     it "guard overwrites value with its :environment and runs" do
       resource.only_if %{ruby -e 'exit 1 if ENV["SAWS_SECRET"] != "regularsecret"'}, {
-        :environment => { 'SAWS_SECRET' => "regularsecret" }
+        :environment => { "SAWS_SECRET" => "regularsecret" },
       }
       resource.run_action(:run)
       expect(resource).to be_updated_by_last_action
@@ -130,10 +130,22 @@ describe Chef::Resource::Execute do
 
     it "guard overwrites value with its :environment and does not runs" do
       resource.only_if %{ruby -e 'exit 1 if ENV["SAWS_SECRET"] == "regularsecret"'}, {
-        :environment => { 'SAWS_SECRET' => "regularsecret" }
+        :environment => { "SAWS_SECRET" => "regularsecret" },
       }
       resource.run_action(:run)
       expect(resource).not_to be_updated_by_last_action
+    end
+  end
+
+  describe "when a guard is specified" do
+    describe "when using the default guard interpreter" do
+      let(:guard_interpreter_resource) { nil }
+      it_behaves_like "a resource with a guard specifying an alternate user identity"
+    end
+
+    describe "when using the execute resource as the guard interpreter" do
+      let(:guard_interpreter_resource) { :execute }
+      it_behaves_like "a resource with a guard specifying an alternate user identity"
     end
   end
 
@@ -145,10 +157,15 @@ describe Chef::Resource::Execute do
   # Timeout::timeout should be longer than resource.timeout, but less than the resource.command ruby sleep timer,
   #   so we fail if we finish on resource.command instead of resource.timeout, but raise CommandTimeout anyway (#2175).
   it "times out when a timeout is set on the resource" do
-    Timeout::timeout(30) do
+    Timeout.timeout(30) do
       resource.command %{ruby -e 'sleep 300'}
       resource.timeout 0.1
       expect { resource.run_action(:run) }.to raise_error(Mixlib::ShellOut::CommandTimeout)
     end
+  end
+
+  describe "when running with an alternate user identity" do
+    let(:resource_command_property) { :command }
+    it_behaves_like "an execute resource that supports alternate user identity"
   end
 end

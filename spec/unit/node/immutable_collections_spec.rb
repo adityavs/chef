@@ -1,6 +1,6 @@
 #
-# Author:: Daniel DeLeo (<dan@opscode.com>)
-# Copyright:: Copyright (c) 2012 Opscode, Inc.
+# Author:: Daniel DeLeo (<dan@chef.io>)
+# Copyright:: Copyright 2012-2017, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,17 +16,22 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
+require "spec_helper"
 require "chef/node/immutable_collections"
 
 describe Chef::Node::ImmutableMash do
+
   before do
-    @data_in = {:top => {:second_level => "some value"},
-                "top_level_2" => %w[array of values],
-                :top_level_3 => [{:hash_array => 1, :hash_array_b => 2}],
-                :top_level_4 => {:level2 => {:key => "value"}}
+    @data_in = { "key" =>
+                 { "top" => { "second_level" => "some value" },
+                   "top_level_2" => %w{array of values},
+                   "top_level_3" => [{ "hash_array" => 1, "hash_array_b" => 2 }],
+                   "top_level_4" => { "level2" => { "key" => "value" } },
+                 },
     }
-    @immutable_mash = Chef::Node::ImmutableMash.new(@data_in)
+    @node = Chef::Node.new()
+    @node.attributes.default = @data_in
+    @immutable_mash = @node["key"]
   end
 
   it "element references like regular hash" do
@@ -34,7 +39,7 @@ describe Chef::Node::ImmutableMash do
   end
 
   it "element references like a regular Mash" do
-    expect(@immutable_mash[:top_level_2]).to eq(%w[array of values])
+    expect(@immutable_mash[:top_level_2]).to eq(%w{array of values})
   end
 
   it "converts Hash-like inputs into ImmutableMash's" do
@@ -54,6 +59,14 @@ describe Chef::Node::ImmutableMash do
     expect(@immutable_mash[:top_level_4][:level2]).to be_a(Chef::Node::ImmutableMash)
   end
 
+  # we only ever absorb VividMashes from other precedence levels, which already have
+  # been coerced to only have string keys, so we do not need to do that work twice (performance).
+  it "does not call convert_value like Mash/VividMash" do
+    @node.attributes.default = { test: "foo", "test2" => "bar" }
+    expect(@node[:test]).to eql("foo")
+    expect(@node["test2"]).to eql("bar")
+  end
+
   describe "to_hash" do
     before do
       @copy = @immutable_mash.to_hash
@@ -64,21 +77,72 @@ describe Chef::Node::ImmutableMash do
     end
 
     it "converts an immutable nested mash to a new mutable hash" do
-      expect(@copy['top_level_4']['level2']).to be_instance_of(Hash)
+      expect(@copy["top_level_4"]["level2"]).to be_instance_of(Hash)
     end
 
     it "converts an immutable nested array to a new mutable array" do
-      expect(@copy['top_level_2']).to be_instance_of(Array)
+      expect(@copy["top_level_2"]).to be_instance_of(Array)
+    end
+
+    it "should create a mash with the same content" do
+      expect(@copy).to eql(@immutable_mash)
+    end
+
+    it "should allow mutation" do
+      expect { @copy["m"] = "m" }.not_to raise_error
+    end
+  end
+
+  describe "dup" do
+    before do
+      @copy = @immutable_mash.dup
+    end
+
+    it "converts an immutable mash to a new mutable hash" do
+      expect(@copy).to be_instance_of(Mash)
+    end
+
+    it "converts an immutable nested mash to a new mutable hash" do
+      expect(@copy["top_level_4"]["level2"]).to be_instance_of(Mash)
+    end
+
+    it "converts an immutable nested array to a new mutable array" do
+      expect(@copy["top_level_2"]).to be_instance_of(Array)
     end
 
     it "should create a mash with the same content" do
       expect(@copy).to eq(@immutable_mash)
     end
 
-    it 'should allow mutation' do
-      expect { @copy['m'] = 'm' }.not_to raise_error
+    it "should allow mutation" do
+      expect { @copy["m"] = "m" }.not_to raise_error
+    end
+  end
+
+  describe "to_h" do
+    before do
+      @copy = @immutable_mash.to_h
     end
 
+    it "converts an immutable mash to a new mutable hash" do
+      expect(@copy).to be_instance_of(Hash)
+    end
+
+    it "converts an immutable nested mash to a new mutable hash" do
+      expect(@copy["top_level_4"]["level2"]).to be_instance_of(Hash)
+    end
+
+    it "converts an immutable nested array to a new mutable array" do
+      expect(@copy["top_level_2"]).to be_instance_of(Array)
+    end
+
+    it "should create a mash with the same content" do
+      expect(@copy).to eq(@immutable_mash)
+    end
+
+    it "should allow mutation" do
+      expect { @copy["m"] = "m" }.not_to raise_error
+    end
   end
 
   [
@@ -94,10 +158,14 @@ describe Chef::Node::ImmutableMash do
     :reject!,
     :replace,
     :select!,
-    :shift
+    :shift,
+    :write,
+    :write!,
+    :unlink,
+    :unlink!,
   ].each do |mutator|
     it "doesn't allow mutation via `#{mutator}'" do
-      expect { @immutable_mash.send(mutator) }.to raise_error
+      expect { @immutable_mash.send(mutator) }.to raise_error(Chef::Exceptions::ImmutableAttributeModification)
     end
   end
 
@@ -112,9 +180,11 @@ end
 describe Chef::Node::ImmutableArray do
 
   before do
-    @immutable_array = Chef::Node::ImmutableArray.new(%w[foo bar baz] + Array(1..3) + [nil, true, false, [ "el", 0, nil ] ])
-    immutable_mash = Chef::Node::ImmutableMash.new({:m => 'm'})
-    @immutable_nested_array = Chef::Node::ImmutableArray.new(["level1",@immutable_array, immutable_mash])
+    @node = Chef::Node.new()
+    @node.attributes.default = { "key" => ["level1", %w{foo bar baz} + Array(1..3) + [nil, true, false, [ "el", 0, nil ] ], { "m" => "m" }] }
+    @immutable_array = @node["key"][1]
+    @immutable_mash = @node["key"][2]
+    @immutable_nested_array = @node["key"]
   end
 
   ##
@@ -151,10 +221,10 @@ describe Chef::Node::ImmutableArray do
     :sort!,
     :sort_by!,
     :uniq!,
-    :unshift
+    :unshift,
   ].each do |mutator|
     it "does not allow mutation via `#{mutator}" do
-      expect { @immutable_array.send(mutator)}.to raise_error
+      expect { @immutable_array.send(mutator) }.to raise_error(Chef::Exceptions::ImmutableAttributeModification)
     end
   end
 
@@ -186,13 +256,76 @@ describe Chef::Node::ImmutableArray do
     end
 
     it "should create an array with the same content" do
-      expect(@copy).to eq(@immutable_nested_array)
+      expect(@immutable_nested_array).to eq(@copy)
     end
 
-    it 'should allow mutation' do
-      expect { @copy << 'm' }.not_to raise_error
+    it "should allow mutation" do
+      expect { @copy << "m" }.not_to raise_error
     end
   end
 
-end
+  describe "dup" do
+    before do
+      @copy = @immutable_nested_array.dup
+    end
 
+    it "converts an immutable array to a new mutable array" do
+      expect(@copy).to be_instance_of(Array)
+    end
+
+    it "converts an immutable nested array to a new mutable array" do
+      expect(@copy[1]).to be_instance_of(Array)
+    end
+
+    it "converts an immutable nested mash to a new mutable hash" do
+      expect(@copy[2]).to be_instance_of(Mash)
+    end
+
+    it "should create an array with the same content" do
+      expect(@copy).to eq(@immutable_nested_array)
+    end
+
+    it "should allow mutation" do
+      expect { @copy << "m" }.not_to raise_error
+    end
+  end
+
+  describe "to_array" do
+    before do
+      @copy = @immutable_nested_array.to_array
+    end
+
+    it "converts an immutable array to a new mutable array" do
+      expect(@copy).to be_instance_of(Array)
+    end
+
+    it "converts an immutable nested array to a new mutable array" do
+      expect(@copy[1]).to be_instance_of(Array)
+    end
+
+    it "converts an immutable nested mash to a new mutable hash" do
+      expect(@copy[2]).to be_instance_of(Hash)
+    end
+
+    it "should create an array with the same content" do
+      expect(@immutable_nested_array).to eq(@copy)
+    end
+
+    it "should allow mutation" do
+      expect { @copy << "m" }.not_to raise_error
+    end
+  end
+
+  describe "#[]" do
+    it "works with array slices" do
+      expect(@immutable_array[1, 2]).to eql(%w{bar baz})
+    end
+  end
+
+  describe "uniq" do
+    it "works" do
+      @node.attributes.default = { "key" => %w{foo bar foo baz bar} }
+      expect(@node["key"].uniq).to eql(%w{foo bar baz})
+    end
+  end
+end

@@ -1,6 +1,6 @@
 #
 # Author:: Daniel DeLeo (<dan@kallistec.com>)
-# Copyright:: Copyright (c) 2008 Opscode, Inc.
+# Copyright:: Copyright 2008-2016, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,14 +20,16 @@ require "chef/resource/scm"
 
 class Chef
   class Resource
+    # Use the git resource to manage source control resources that exist in a git repository. git version 1.6.5 (or higher)
+    # is required to use all of the functionality in the git resource.
     class Git < Chef::Resource::Scm
 
-      def initialize(name, run_context=nil)
+      def initialize(name, run_context = nil)
         super
         @additional_remotes = Hash[]
       end
 
-      def additional_remotes(arg=nil)
+      def additional_remotes(arg = nil)
         set_or_return(
           :additional_remotes,
           arg,

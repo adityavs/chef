@@ -1,7 +1,7 @@
 #
-# Author:: Adam Jacob (<adam@opscode.com>)
-# Author:: Tyler Cloke (<tyler@opscode.com>)
-# Copyright:: Copyright (c) 2008 Opscode, Inc.
+# Author:: Adam Jacob (<adam@chef.io>)
+# Author:: Tyler Cloke (<tyler@chef.io>)
+# Copyright:: Copyright 2008-2016, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,42 +17,34 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
+require "spec_helper"
 
 describe Chef::Resource::HttpRequest do
+  let(:resource) { Chef::Resource::HttpRequest.new("fakey_fakerton") }
 
-  before(:each) do
-    @resource = Chef::Resource::HttpRequest.new("fakey_fakerton")
+  it "sets url to a string" do
+    resource.url "http://slashdot.org"
+    expect(resource.url).to eql("http://slashdot.org")
   end
 
-  it "should create a new Chef::Resource::HttpRequest" do
-    expect(@resource).to be_a_kind_of(Chef::Resource)
-    expect(@resource).to be_a_kind_of(Chef::Resource::HttpRequest)
+  it "sets the message to the name by default" do
+    expect(resource.message).to eql("fakey_fakerton")
   end
 
-  it "should set url to a string" do
-    @resource.url "http://slashdot.org"
-    expect(@resource.url).to eql("http://slashdot.org")
-  end
-
-  it "should set the message to the name by default" do
-    expect(@resource.message).to eql("fakey_fakerton")
-  end
-
-  it "should set message to a string" do
-    @resource.message "monkeybars"
-    expect(@resource.message).to eql("monkeybars")
+  it "sets message to a string" do
+    resource.message "monkeybars"
+    expect(resource.message).to eql("monkeybars")
   end
 
   describe "when it has a message and headers" do
     before do
-      @resource.url("http://www.trololol.net")
-      @resource.message("Get sum post brah.")
-      @resource.headers({"head" => "tail"})
+      resource.url("http://www.trololol.net")
+      resource.message("Get sum post brah.")
+      resource.headers({ "head" => "tail" })
     end
 
     it "returns the url as its identity" do
-      expect(@resource.identity).to eq("http://www.trololol.net")
+      expect(resource.identity).to eq("http://www.trololol.net")
     end
   end
 

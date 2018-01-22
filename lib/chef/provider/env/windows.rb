@@ -1,6 +1,6 @@
 #
 # Author:: Doug MacEachern (<dougm@vmware.com>)
-# Copyright:: Copyright (c) 2010 VMware, Inc.
+# Copyright:: Copyright 2010-2016, VMware, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require 'chef/mixin/windows_env_helper'
+require "chef/mixin/windows_env_helper"
 
 class Chef
   class Provider
@@ -25,6 +25,10 @@ class Chef
         include Chef::Mixin::WindowsEnvHelper
 
         provides :env, os: "windows"
+
+        def whyrun_supported?
+          false
+        end
 
         def create_env
           obj = env_obj(@new_resource.key_name)
@@ -36,7 +40,7 @@ class Chef
           obj.variablevalue = @new_resource.value
           obj.put_
           value = @new_resource.value
-          value = expand_path(value) if @new_resource.key_name.upcase == 'PATH'
+          value = expand_path(value) if @new_resource.key_name.casecmp("PATH") == 0
           ENV[@new_resource.key_name] = value
           broadcast_env_change
         end
@@ -54,7 +58,7 @@ class Chef
 
         def env_value(key_name)
           obj = env_obj(key_name)
-          return obj ? obj.variablevalue : ENV[key_name]
+          obj ? obj.variablevalue : ENV[key_name]
         end
 
         def env_obj(key_name)

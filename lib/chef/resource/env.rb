@@ -1,7 +1,7 @@
 #
 # Author:: Doug MacEachern (<dougm@vmware.com>)
-# Author:: Tyler Cloke (<tyler@opscode.com>)
-# Copyright:: Copyright (c) 2010 VMware, Inc.
+# Author:: Tyler Cloke (<tyler@chef.io>)
+# Copyright:: Copyright 2010-2016, VMware, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,47 +19,18 @@
 
 class Chef
   class Resource
+    # Use the env resource to manage environment keys in Microsoft Windows. After an environment key is set, Microsoft
+    # Windows must be restarted before the environment key will be available to the Task Scheduler.
     class Env < Chef::Resource
-
-      identity_attr :key_name
-
-      state_attrs :value
-
+      resource_name :env
       provides :env, os: "windows"
 
       default_action :create
       allowed_actions :create, :delete, :modify
 
-      def initialize(name, run_context=nil)
-        super
-        @key_name = name
-        @value = nil
-        @delim = nil
-      end
-
-      def key_name(arg=nil)
-        set_or_return(
-          :key_name,
-          arg,
-          :kind_of => [ String ]
-        )
-      end
-
-      def value(arg=nil)
-        set_or_return(
-          :value,
-          arg,
-          :kind_of => [ String ]
-        )
-      end
-
-      def delim(arg=nil)
-        set_or_return(
-          :delim,
-          arg,
-          :kind_of => [ String ]
-        )
-      end
+      property :key_name, String, identity: true, name_property: true
+      property :value, String, required: true
+      property :delim, [ String, nil, false ], desired_state: false
     end
   end
 end

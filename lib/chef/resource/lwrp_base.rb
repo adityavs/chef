@@ -2,7 +2,7 @@
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Christopher Walters (<cw@chef.io>)
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright (c) 2008-2015 Chef Software, Inc.
+# Copyright:: Copyright 2008-2018, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,14 @@
 # limitations under the License.
 #
 
-require 'chef/resource'
-require 'chef/resource_resolver'
-require 'chef/node'
-require 'chef/log'
-require 'chef/exceptions'
-require 'chef/mixin/convert_to_class_name'
-require 'chef/mixin/from_file'
-require 'chef/mixin/params_validate' # for DelayedEvaluator
+require "chef/resource"
+require "chef/resource_resolver"
+require "chef/node"
+require "chef/log"
+require "chef/exceptions"
+require "chef/mixin/convert_to_class_name"
+require "chef/mixin/from_file"
+require "chef/mixin/params_validate" # for DelayedEvaluator
 
 class Chef
   class Resource
@@ -41,11 +41,9 @@ class Chef
         include Chef::Mixin::ConvertToClassName
         include Chef::Mixin::FromFile
 
-        attr_accessor :loaded_lwrps
-
         def build_from_file(cookbook_name, filename, run_context)
           if LWRPBase.loaded_lwrps[filename]
-            Chef::Log.info("Custom resource #{filename} from cookbook #{cookbook_name} has already been loaded!  Skipping the reload.")
+            Chef::Log.debug("Custom resource #{filename} from cookbook #{cookbook_name} has already been loaded!  Skipping the reload.")
             return loaded_lwrps[filename]
           end
 
@@ -69,8 +67,6 @@ class Chef
 
           LWRPBase.loaded_lwrps[filename] = true
 
-          # Create the deprecated Chef::Resource::LwrpFoo class
-          Chef::Resource.register_deprecated_lwrp_class(resource_class, convert_to_class_name(resource_name))
           resource_class
         end
 
@@ -104,6 +100,7 @@ class Chef
 
         protected
 
+        attr_writer :loaded_lwrps
         def loaded_lwrps
           @loaded_lwrps ||= {}
         end

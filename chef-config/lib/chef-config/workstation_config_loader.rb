@@ -1,6 +1,6 @@
 #
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright (c) 2014 Chef Software, Inc.
+# Copyright:: Copyright 2014-2016, Chef Software, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,28 +16,37 @@
 # limitations under the License.
 #
 
-require 'chef-config/config'
-require 'chef-config/exceptions'
-require 'chef-config/logger'
-require 'chef-config/path_helper'
-require 'chef-config/windows'
+require "chef-config/config"
+require "chef-config/exceptions"
+require "chef-config/logger"
+require "chef-config/path_helper"
+require "chef-config/windows"
+require "chef-config/mixin/dot_d"
+require "chef-config/mixin/credentials"
 
 module ChefConfig
   class WorkstationConfigLoader
+    include ChefConfig::Mixin::DotD
+    include ChefConfig::Mixin::Credentials
 
     # Path to a config file requested by user, (e.g., via command line option). Can be nil
     attr_accessor :explicit_config_file
+    # The name of a credentials profile. Can be nil
+    attr_accessor :profile
+    attr_reader :credentials_found
 
     # TODO: initialize this with a logger for Chef and Knife
-    def initialize(explicit_config_file, logger=nil)
+    def initialize(explicit_config_file, logger = nil, profile: nil)
       @explicit_config_file = explicit_config_file
       @chef_config_dir = nil
       @config_location = nil
+      @profile = profile
       @logger = logger || NullLogger.new
+      @credentials_found = false
     end
 
     def no_config_found?
-      config_location.nil?
+      config_location.nil? && !credentials_found
     end
 
     def config_location
@@ -60,17 +69,20 @@ module ChefConfig
     end
 
     def load
+      load_credentials(profile)
       # Ignore it if there's no explicit_config_file and can't find one at a
       # default path.
-      return false if config_location.nil?
+      if !config_location.nil?
+        if explicit_config_file && !path_exists?(config_location)
+          raise ChefConfig::ConfigurationError, "Specified config file #{config_location} does not exist"
+        end
 
-      if explicit_config_file && !path_exists?(config_location)
-        raise ChefConfig::ConfigurationError, "Specified config file #{config_location} does not exist"
+        # Have to set Config.config_file b/c other config is derived from it.
+        Config.config_file = config_location
+        apply_config(IO.read(config_location), config_location)
       end
 
-      # Have to set Config.config_file b/c other config is derived from it.
-      Config.config_file = config_location
-      read_config(IO.read(config_location), config_location)
+      load_dot_d(Config[:config_d_dir]) if Config[:config_d_dir]
     end
 
     # (Private API, public for test purposes)
@@ -99,42 +111,74 @@ module ChefConfig
       candidate_configs = []
 
       # Look for $KNIFE_HOME/knife.rb (allow multiple knives config on same machine)
-      if env['KNIFE_HOME']
-        candidate_configs << File.join(env['KNIFE_HOME'], 'config.rb')
-        candidate_configs << File.join(env['KNIFE_HOME'], 'knife.rb')
+      if env["KNIFE_HOME"]
+        candidate_configs << File.join(env["KNIFE_HOME"], "config.rb")
+        candidate_configs << File.join(env["KNIFE_HOME"], "knife.rb")
       end
       # Look for $PWD/knife.rb
       if Dir.pwd
-        candidate_configs << File.join(Dir.pwd, 'config.rb')
-        candidate_configs << File.join(Dir.pwd, 'knife.rb')
+        candidate_configs << File.join(Dir.pwd, "config.rb")
+        candidate_configs << File.join(Dir.pwd, "knife.rb")
       end
       # Look for $UPWARD/.chef/knife.rb
       if chef_config_dir
-        candidate_configs << File.join(chef_config_dir, 'config.rb')
-        candidate_configs << File.join(chef_config_dir, 'knife.rb')
+        candidate_configs << File.join(chef_config_dir, "config.rb")
+        candidate_configs << File.join(chef_config_dir, "knife.rb")
       end
       # Look for $HOME/.chef/knife.rb
-      PathHelper.home('.chef') do |dot_chef_dir|
-        candidate_configs << File.join(dot_chef_dir, 'config.rb')
-        candidate_configs << File.join(dot_chef_dir, 'knife.rb')
+      PathHelper.home(".chef") do |dot_chef_dir|
+        candidate_configs << File.join(dot_chef_dir, "config.rb")
+        candidate_configs << File.join(dot_chef_dir, "knife.rb")
       end
 
-      candidate_configs.find do | candidate_config |
+      candidate_configs.find do |candidate_config|
         have_config?(candidate_config)
       end
     end
 
     def working_directory
       a = if ChefConfig.windows?
-            env['CD']
+            env["CD"]
           else
-            env['PWD']
+            env["PWD"]
           end || Dir.pwd
 
       a
     end
 
-    def read_config(config_content, config_file_path)
+    def apply_credentials(creds, profile)
+      Config.profile ||= profile
+      if creds.key?("node_name") && creds.key?("client_name")
+        raise ChefConfig::ConfigurationError, "Do not specify both node_name and client_name. You should prefer client_name."
+      end
+      Config.node_name = creds.fetch("node_name") if creds.key?("node_name")
+      Config.node_name = creds.fetch("client_name") if creds.key?("client_name")
+      Config.chef_server_url = creds.fetch("chef_server_url") if creds.key?("chef_server_url")
+      Config.validation_client_name = creds.fetch("validation_client_name") if creds.key?("validation_client_name")
+
+      extract_key(creds, "validation_key", :validation_key, :validation_key_contents)
+      extract_key(creds, "validator_key", :validation_key, :validation_key_contents)
+      extract_key(creds, "client_key", :client_key, :client_key_contents)
+      @credentials_found = true
+    end
+
+    def extract_key(creds, name, config_path, config_contents)
+      return unless creds.has_key?(name)
+
+      val = creds.fetch(name)
+      if val.start_with?("-----BEGIN RSA PRIVATE KEY-----")
+        Config.send(config_contents, val)
+      else
+        abs_path = Pathname.new(val).expand_path(home_chef_dir)
+        Config.send(config_path, abs_path)
+      end
+    end
+
+    def home_chef_dir
+      @home_chef_dir ||= PathHelper.home(".chef")
+    end
+
+    def apply_config(config_content, config_file_path)
       Config.from_string(config_content, config_file_path)
     rescue SignalException
       raise
@@ -151,7 +195,7 @@ module ChefConfig
       message = "You have an error in your config file #{config_file_path}\n\n"
       message << "#{e.class.name}: #{e.message}\n"
       filtered_trace = e.backtrace.grep(/#{Regexp.escape(config_file_path)}/)
-      filtered_trace.each {|bt_line| message << "  " << bt_line << "\n" }
+      filtered_trace.each { |bt_line| message << "  " << bt_line << "\n" }
       if !filtered_trace.empty?
         line_nr = filtered_trace.first[/#{Regexp.escape(config_file_path)}:([\d]+)/, 1]
         message << highlight_config_error(config_file_path, line_nr.to_i)
@@ -159,10 +203,9 @@ module ChefConfig
       raise ChefConfig::ConfigurationError, message
     end
 
-
     def highlight_config_error(file, line)
       config_file_lines = []
-      IO.readlines(file).each_with_index {|l, i| config_file_lines << "#{(i + 1).to_s.rjust(3)}: #{l.chomp}"}
+      IO.readlines(file).each_with_index { |l, i| config_file_lines << "#{(i + 1).to_s.rjust(3)}: #{l.chomp}" }
       if line == 1
         lines = config_file_lines[0..3]
       else

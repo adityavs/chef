@@ -1,6 +1,6 @@
 #
-# Author:: Daniel DeLeo (<dan@getchef.com>)
-# Copyright:: Copyright (c) 2014 Chef Software, Inc.
+# Author:: Daniel DeLeo (<dan@chef.io>)
+# Copyright:: Copyright 2014-2016, Chef Software, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,12 +16,12 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
-require 'tempfile'
+require "spec_helper"
+require "tempfile"
 
-require 'chef-config/exceptions'
-require 'chef-config/windows'
-require 'chef-config/workstation_config_loader'
+require "chef-config/exceptions"
+require "chef-config/windows"
+require "chef-config/workstation_config_loader"
 
 RSpec.describe ChefConfig::WorkstationConfigLoader do
 
@@ -35,6 +35,13 @@ RSpec.describe ChefConfig::WorkstationConfigLoader do
     end
   end
 
+  before do
+    # We set this to nil so that a dev workstation will
+    # not interfere with the tests.
+    ChefConfig::Config.reset
+    ChefConfig::Config[:config_d_dir] = nil
+  end
+
   # Test methods that do I/O or reference external state which are stubbed out
   # elsewhere.
   describe "external dependencies" do
@@ -45,7 +52,7 @@ RSpec.describe ChefConfig::WorkstationConfigLoader do
     end
 
     it "tests a path's existence" do
-      expect(config_loader.path_exists?('/nope/nope/nope/nope/frab/jab/nab')).to be(false)
+      expect(config_loader.path_exists?("/nope/nope/nope/nope/frab/jab/nab")).to be(false)
       expect(config_loader.path_exists?(__FILE__)).to be(true)
     end
 
@@ -68,7 +75,7 @@ RSpec.describe ChefConfig::WorkstationConfigLoader do
         let(:home) { "/Users/example.user" }
 
         before do
-          allow(ChefConfig::PathHelper).to receive(:home).with('.chef').and_yield(File.join(home, '.chef'))
+          allow(ChefConfig::PathHelper).to receive(:home).with(".chef").and_yield(File.join(home, ".chef"))
           allow(config_loader).to receive(:path_exists?).with("#{home}/.chef/knife.rb").and_return(true)
         end
 
@@ -138,7 +145,6 @@ RSpec.describe ChefConfig::WorkstationConfigLoader do
                     expect(config_loader.config_location).to eq("#{cwd}/config.rb")
                   end
 
-
                   context "and/or KNIFE_HOME is set" do
 
                     let(:knife_home) { "/path/to/knife/home" }
@@ -206,7 +212,6 @@ RSpec.describe ChefConfig::WorkstationConfigLoader do
     end
   end
 
-
   describe "loading the config file" do
 
     context "when no explicit config is specifed and no implicit config is found" do
@@ -217,7 +222,8 @@ RSpec.describe ChefConfig::WorkstationConfigLoader do
 
       it "skips loading" do
         expect(config_loader.config_location).to be(nil)
-        expect(config_loader.load).to be(false)
+        expect(config_loader).not_to receive(:apply_config)
+        config_loader.load
       end
 
     end
@@ -256,7 +262,8 @@ RSpec.describe ChefConfig::WorkstationConfigLoader do
         let(:config_content) { "config_file_evaluated(true)" }
 
         it "loads the config" do
-          expect(config_loader.load).to be(true)
+          expect(config_loader).to receive(:apply_config).and_call_original
+          config_loader.load
           expect(ChefConfig::Config.config_file_evaluated).to be(true)
         end
 
@@ -288,4 +295,216 @@ RSpec.describe ChefConfig::WorkstationConfigLoader do
 
   end
 
+  describe "when loading config.d" do
+    context "when the conf.d directory exists" do
+      let(:config_content) { "" }
+
+      let(:tempdir) { Dir.mktmpdir("chef-workstation-test") }
+
+      let!(:confd_file) do
+        Tempfile.new(["Chef-WorkstationConfigLoader-rspec-test", ".rb"], tempdir).tap do |t|
+          t.print(config_content)
+          t.close
+        end
+      end
+
+      before do
+        ChefConfig::Config[:config_d_dir] = tempdir
+        allow(config_loader).to receive(:path_exists?).with(
+          an_instance_of(String)).and_return(false)
+      end
+
+      after do
+        FileUtils.remove_entry_secure tempdir
+      end
+
+      context "and is valid" do
+        let(:config_content) { "config_d_file_evaluated(true)" }
+
+        it "loads the config" do
+          expect(config_loader).to receive(:apply_config).and_call_original
+          config_loader.load
+          expect(ChefConfig::Config.config_d_file_evaluated).to be(true)
+        end
+      end
+
+      context "and has a syntax error" do
+        let(:config_content) { "{{{{{:{{" }
+
+        it "raises a ConfigurationError" do
+          expect { config_loader.load }.to raise_error(ChefConfig::ConfigurationError)
+        end
+      end
+
+      context "has a non rb file" do
+        let(:sytax_error_content) { "{{{{{:{{" }
+        let(:config_content) { "config_d_file_evaluated(true)" }
+
+        let!(:not_confd_file) do
+          Tempfile.new(["Chef-WorkstationConfigLoader-rspec-test", ".foorb"], tempdir).tap do |t|
+            t.print(sytax_error_content)
+            t.close
+          end
+        end
+
+        it "does not load the non rb file" do
+          expect { config_loader.load }.not_to raise_error
+          expect(ChefConfig::Config.config_d_file_evaluated).to be(true)
+        end
+      end
+    end
+
+    context "when the conf.d directory does not exist" do
+      before do
+        ChefConfig::Config[:config_d_dir] = "/nope/nope/nope/nope/notdoingit"
+      end
+
+      it "does not load anything" do
+        expect(config_loader).not_to receive(:apply_config)
+      end
+    end
+  end
+
+  describe "when loading a credentials file" do
+    if ChefConfig.windows?
+      let(:home) { "C:/Users/example.user" }
+    else
+      let(:home) { "/Users/example.user" }
+    end
+    let(:credentials_file) { "#{home}/.chef/credentials" }
+    let(:context_file) { "#{home}/.chef/context" }
+
+    before do
+      allow(ChefConfig::PathHelper).to receive(:home).with(".chef").and_return(File.join(home, ".chef"))
+      allow(ChefConfig::PathHelper).to receive(:home).with(".chef", "credentials").and_return(credentials_file)
+      allow(ChefConfig::PathHelper).to receive(:home).with(".chef", "context").and_return(context_file)
+      allow(File).to receive(:file?).with(context_file).and_return false
+    end
+
+    context "when the file exists" do
+      before do
+        expect(File).to receive(:read).with(credentials_file, { encoding: "utf-8" }).and_return(content)
+        allow(File).to receive(:file?).with(credentials_file).and_return true
+      end
+
+      context "and has a default profile" do
+        let(:content) do
+          content = <<EOH
+[default]
+node_name = 'barney'
+client_key = "barney_rubble.pem"
+chef_server_url = "https://api.chef.io/organizations/bedrock"
+EOH
+          content
+        end
+
+        it "applies the expected config" do
+          expect { config_loader.load_credentials }.not_to raise_error
+          expect(ChefConfig::Config.chef_server_url).to eq("https://api.chef.io/organizations/bedrock")
+          expect(ChefConfig::Config.client_key.to_s).to eq("#{home}/.chef/barney_rubble.pem")
+          expect(ChefConfig::Config.profile.to_s).to eq("default")
+        end
+      end
+
+      context "and has a profile containing a full key" do
+        let(:content) do
+          content = <<EOH
+[default]
+client_key = """
+-----BEGIN RSA PRIVATE KEY-----
+foo
+"""
+EOH
+          content
+        end
+
+        it "applies the expected config" do
+          expect { config_loader.load_credentials }.not_to raise_error
+          expect(ChefConfig::Config.client_key_contents).to eq(<<EOH
+-----BEGIN RSA PRIVATE KEY-----
+foo
+EOH
+)
+        end
+      end
+
+      context "and has several profiles" do
+        let(:content) do
+          content = <<EOH
+[default]
+client_name = "default"
+[environment]
+client_name = "environment"
+[explicit]
+client_name = "explicit"
+[context]
+client_name = "context"
+EOH
+          content
+        end
+
+        let(:env) { {} }
+        before do
+          stub_const("ENV", env)
+        end
+
+        it "selects the correct profile explicitly" do
+          expect { config_loader.load_credentials("explicit") }.not_to raise_error
+          expect(ChefConfig::Config.node_name).to eq("explicit")
+        end
+
+        context "with an environment variable" do
+          let(:env) { { "CHEF_PROFILE" => "environment" } }
+
+          it "selects the correct profile" do
+            expect { config_loader.load_credentials }.not_to raise_error
+            expect(ChefConfig::Config.node_name).to eq("environment")
+          end
+        end
+
+        it "selects the correct profile with a context file" do
+          allow(File).to receive(:file?).with(context_file).and_return true
+          expect(File).to receive(:read).with(context_file).and_return "context"
+          expect { config_loader.load_credentials }.not_to raise_error
+          expect(ChefConfig::Config.node_name).to eq("context")
+        end
+
+        it "falls back to the default" do
+          expect { config_loader.load_credentials }.not_to raise_error
+          expect(ChefConfig::Config.node_name).to eq("default")
+        end
+      end
+
+      context "and contains both node_name and client_name" do
+        let(:content) do
+          content = <<EOH
+[default]
+node_name = 'barney'
+client_name = 'barney'
+EOH
+          content
+        end
+
+        it "raises a ConfigurationError" do
+          expect { config_loader.load_credentials }.to raise_error(ChefConfig::ConfigurationError)
+        end
+      end
+
+      context "and has a syntax error" do
+        let(:content) { "<<<<<" }
+
+        it "raises a ConfigurationError" do
+          expect { config_loader.load_credentials }.to raise_error(ChefConfig::ConfigurationError)
+        end
+      end
+    end
+
+    context "when the file does not exist" do
+      it "does not load anything" do
+        allow(File).to receive(:file?).with(credentials_file).and_return false
+        expect(Tomlrb).not_to receive(:load_file)
+        config_loader.load_credentials
+      end
+    end
+  end
 end

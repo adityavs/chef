@@ -1,6 +1,6 @@
 #
 # Author:: Lamont Granquist (<lamont@chef.io>)
-# Copyright:: Copyright (c) 2014 Chef Software, Inc.
+# Copyright:: Copyright 2014-2016, Chef Software, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require 'chef/chef_class'
+require "chef/chef_class"
 
 class Chef
   class Platform
@@ -69,7 +69,7 @@ class Chef
           configs = []
 
           if ::File.exist?(Chef.path_to("/etc/init.d/#{service_name}"))
-            configs << :initd
+            configs += [ :initd, :systemd ]
           end
 
           if ::File.exist?(Chef.path_to("/etc/init/#{service_name}.conf"))
@@ -99,11 +99,11 @@ class Chef
 
         def systemd_is_init?
           ::File.exist?(Chef.path_to("/proc/1/comm")) &&
-            ::File.open(Chef.path_to("/proc/1/comm")).gets.chomp == "systemd" 
+            ::File.open(Chef.path_to("/proc/1/comm")).gets.chomp == "systemd"
         end
 
         def has_systemd_service_unit?(svc_name)
-          %w( /etc /usr/lib /lib /run ).any? do |load_path|
+          %w{ /etc /usr/lib /lib /run }.any? do |load_path|
             ::File.exist?(
               Chef.path_to("#{load_path}/systemd/system/#{svc_name.gsub(/@.*$/, '@')}.service")
             )
@@ -112,7 +112,7 @@ class Chef
 
         def has_systemd_unit?(svc_name)
           # TODO: stop supporting non-service units with service resource
-          %w( /etc /usr/lib /lib /run ).any? do |load_path|
+          %w{ /etc /usr/lib /lib /run }.any? do |load_path|
             ::File.exist?(Chef.path_to("#{load_path}/systemd/system/#{svc_name}"))
           end
         end

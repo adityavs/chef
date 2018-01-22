@@ -1,7 +1,7 @@
 #--
-# Author:: Adam Jacob (<adam@opscode.com>)
-# Author:: Christopher Walters (<cw@opscode.com>)
-# Copyright:: Copyright (c) 2008, 2009 Opscode, Inc.
+# Author:: Adam Jacob (<adam@chef.io>)
+# Author:: Christopher Walters (<cw@chef.io>)
+# Copyright:: Copyright 2008-2017, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,31 +17,20 @@
 # limitations under the License.
 #
 
-
-require 'chef/dsl/recipe'
-require 'chef/dsl/data_query'
-require 'chef/dsl/platform_introspection'
-require 'chef/dsl/include_recipe'
-require 'chef/dsl/registry_helper'
-require 'chef/dsl/reboot_pending'
-require 'chef/dsl/audit'
-require 'chef/dsl/powershell'
-
-require 'chef/mixin/from_file'
-
-require 'chef/mixin/deprecation'
+require "chef/dsl/recipe"
+require "chef/mixin/from_file"
+require "chef/mixin/deprecation"
 
 class Chef
   # == Chef::Recipe
   # A Recipe object is the context in which Chef recipes are evaluated.
   class Recipe
+    attr_accessor :cookbook_name, :recipe_name, :recipe, :params, :run_context
 
-    include Chef::DSL::Recipe::FullDSL
+    include Chef::DSL::Recipe
 
     include Chef::Mixin::FromFile
     include Chef::Mixin::Deprecation
-
-    attr_accessor :cookbook_name, :recipe_name, :recipe, :params, :run_context
 
     # Parses a potentially fully-qualified recipe name into its
     # cookbook name and recipe short name.
@@ -116,5 +105,12 @@ class Chef
       end
     end
 
+    def to_s
+      "cookbook: #{cookbook_name ? cookbook_name : "(none)"}, recipe: #{recipe_name ? recipe_name : "(none)"} "
+    end
+
+    def inspect
+      to_s
+    end
   end
 end

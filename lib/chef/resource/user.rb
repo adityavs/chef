@@ -1,6 +1,6 @@
 #
-# Author:: Adam Jacob (<adam@opscode.com>)
-# Copyright:: Copyright (c) 2008 Opscode, Inc.
+# Author:: Adam Jacob (<adam@chef.io>)
+# Copyright:: Copyright 2008-2017, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,13 @@
 # limitations under the License.
 #
 
-require 'chef/resource'
+require "chef/resource"
 
 class Chef
   class Resource
+    # Use the user resource to add users, update existing users, remove users, and to lock/unlock user passwords.
     class User < Chef::Resource
+      resource_name :user_resource_abstract_base_class # this prevents magickal class name DSL wiring
       identity_attr :username
 
       state_attrs :uid, :gid, :home
@@ -28,7 +30,7 @@ class Chef
       default_action :create
       allowed_actions :create, :remove, :modify, :manage, :lock, :unlock
 
-      def initialize(name, run_context=nil)
+      def initialize(name, run_context = nil)
         super
         @username = name
         @comment = nil
@@ -41,15 +43,11 @@ class Chef
         @manage_home = false
         @force = false
         @non_unique = false
-        @supports = {
-          :manage_home => false,
-          :non_unique => false
-        }
         @iterations = 27855
         @salt = nil
       end
 
-      def username(arg=nil)
+      def username(arg = nil)
         set_or_return(
           :username,
           arg,
@@ -57,7 +55,7 @@ class Chef
         )
       end
 
-      def comment(arg=nil)
+      def comment(arg = nil)
         set_or_return(
           :comment,
           arg,
@@ -65,25 +63,27 @@ class Chef
         )
       end
 
-      def uid(arg=nil)
+      def uid(arg = Chef::NOT_PASSED)
         set_or_return(
           :uid,
           arg,
-          :kind_of => [ String, Integer ]
+          :kind_of => [ String, Integer, NilClass ],
+          :coerce => proc { |x| x || nil }
         )
       end
 
-      def gid(arg=nil)
+      def gid(arg = Chef::NOT_PASSED)
         set_or_return(
           :gid,
           arg,
-          :kind_of => [ String, Integer ]
+          :kind_of => [ String, Integer, NilClass ],
+          :coerce => proc { |x| x || nil }
         )
       end
 
       alias_method :group, :gid
 
-      def home(arg=nil)
+      def home(arg = nil)
         set_or_return(
           :home,
           arg,
@@ -91,7 +91,7 @@ class Chef
         )
       end
 
-      def shell(arg=nil)
+      def shell(arg = nil)
         set_or_return(
           :shell,
           arg,
@@ -99,7 +99,7 @@ class Chef
         )
       end
 
-      def password(arg=nil)
+      def password(arg = nil)
         set_or_return(
           :password,
           arg,
@@ -107,7 +107,7 @@ class Chef
         )
       end
 
-      def salt(arg=nil)
+      def salt(arg = nil)
         set_or_return(
           :salt,
           arg,
@@ -115,7 +115,7 @@ class Chef
         )
       end
 
-      def iterations(arg=nil)
+      def iterations(arg = nil)
         set_or_return(
           :iterations,
           arg,
@@ -123,7 +123,7 @@ class Chef
         )
       end
 
-      def system(arg=nil)
+      def system(arg = nil)
         set_or_return(
           :system,
           arg,
@@ -131,7 +131,7 @@ class Chef
         )
       end
 
-      def manage_home(arg=nil)
+      def manage_home(arg = nil)
         set_or_return(
           :manage_home,
           arg,
@@ -139,7 +139,7 @@ class Chef
         )
       end
 
-      def force(arg=nil)
+      def force(arg = nil)
         set_or_return(
           :force,
           arg,
@@ -147,14 +147,13 @@ class Chef
         )
       end
 
-      def non_unique(arg=nil)
+      def non_unique(arg = nil)
         set_or_return(
           :non_unique,
           arg,
           :kind_of => [ TrueClass, FalseClass ]
         )
       end
-
     end
   end
 end

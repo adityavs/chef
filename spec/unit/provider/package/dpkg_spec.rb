@@ -1,6 +1,5 @@
-#
 # Author:: Bryan McLellan (btm@loftninjas.org)
-# Copyright:: Copyright (c) 2009 Bryan McLellan
+# Copyright:: Copyright 2009-2016, Bryan McLellan
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +15,7 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
+require "spec_helper"
 
 describe Chef::Provider::Package::Dpkg do
   let(:node) { Chef::Node.new }
@@ -25,7 +24,7 @@ describe Chef::Provider::Package::Dpkg do
   let(:package) { "wget" }
   let(:source) { "/tmp/wget_1.11.4-1ubuntu1_amd64.deb" }
   let(:new_resource) do
-    new_resource = Chef::Resource::Package.new(package)
+    new_resource = Chef::Resource::DpkgPackage.new(package)
     new_resource.source source
     new_resource
   end
@@ -52,8 +51,8 @@ Conflicts: wget-ssl
   end
 
   before(:each) do
-    allow(provider).to receive(:shell_out!).with("dpkg-deb -W #{new_resource.source}", timeout: 900).and_return(dpkg_deb_status)
-    allow(provider).to receive(:shell_out).with("dpkg -s #{package}", timeout: 900).and_return(dpkg_s_status)
+    allow(provider).to receive(:shell_out!).with("dpkg-deb", "-W", source, timeout: 900).and_return(dpkg_deb_status)
+    allow(provider).to receive(:shell_out!).with("dpkg", "-s", package, timeout: 900, returns: [0, 1]).and_return(double(stdout: "", exitstatus: 1))
     allow(::File).to receive(:exist?).with(source).and_return(true)
   end
 
@@ -81,30 +80,26 @@ Conflicts: wget-ssl
       expect { provider.run_action(:purge) }.not_to raise_error
     end
 
-    it "should raise an exception if a source is nil when :install" do
-      new_resource.source nil
-      allow(::File).to receive(:exist?).with(source).and_return(false)
-      expect { provider.run_action(:install) }.to raise_error(Chef::Exceptions::Package)
-    end
+    context "when source is nil" do
+      let(:source) { nil }
 
-    it "should raise an exception if a source is nil when :upgrade" do
-      new_resource.source nil
-      allow(::File).to receive(:exist?).with(source).and_return(false)
-      expect { provider.run_action(:upgrade) }.to raise_error(Chef::Exceptions::Package)
-    end
+      it "should raise an exception if a source is nil when :install" do
+        expect { provider.run_action(:install) }.to raise_error(Chef::Exceptions::Package)
+      end
 
-    it "should not raise an exception if a source is nil when :remove" do
-      new_resource.source nil
-      allow(::File).to receive(:exist?).with(source).and_return(false)
-      expect(provider).to receive(:action_remove)
-      expect { provider.run_action(:remove) }.not_to raise_error
-    end
+      it "should raise an exception if a source is nil when :upgrade" do
+        expect { provider.run_action(:upgrade) }.to raise_error(Chef::Exceptions::Package)
+      end
 
-    it "should not raise an exception if a source is nil when :purge" do
-      new_resource.source nil
-      allow(::File).to receive(:exist?).with(source).and_return(false)
-      expect(provider).to receive(:action_purge)
-      expect { provider.run_action(:purge) }.not_to raise_error
+      it "should not raise an exception if a source is nil when :remove" do
+        expect(provider).to receive(:action_remove)
+        expect { provider.run_action(:remove) }.not_to raise_error
+      end
+
+      it "should not raise an exception if a source is nil when :purge" do
+        expect(provider).to receive(:action_purge)
+        expect { provider.run_action(:purge) }.not_to raise_error
+      end
     end
   end
 
@@ -112,32 +107,32 @@ Conflicts: wget-ssl
 
     it "should create a current resource with the name of the new_resource" do
       provider.load_current_resource
-      expect(provider.current_resource.package_name).to eq("wget")
+      expect(provider.current_resource.package_name).to eq(["wget"])
     end
 
-    describe 'gets the source package version from dpkg-deb' do
+    describe "gets the source package version from dpkg-deb" do
       def check_version(version)
         status = double(:stdout => "wget\t#{version}", :exitstatus => 0)
-        expect(provider).to receive(:shell_out!).with("dpkg-deb -W #{new_resource.source}", timeout: 900).and_return(status)
+        expect(provider).to receive(:shell_out!).with("dpkg-deb", "-W", source, timeout: 900).and_return(status)
         provider.load_current_resource
-        expect(provider.current_resource.package_name).to eq("wget")
-        expect(provider.candidate_version).to eq(version)
+        expect(provider.current_resource.package_name).to eq(["wget"])
+        expect(provider.candidate_version).to eq([version])
       end
 
-      it 'if short version provided' do
-        check_version('1.11.4')
+      it "if short version provided" do
+        check_version("1.11.4")
       end
 
-      it 'if extended version provided' do
-        check_version('1.11.4-1ubuntu1')
+      it "if extended version provided" do
+        check_version("1.11.4-1ubuntu1")
       end
 
-      it 'if distro-specific version provided' do
-        check_version('1.11.4-1ubuntu1~lucid')
+      it "if distro-specific version provided" do
+        check_version("1.11.4-1ubuntu1~lucid")
       end
 
-      it 'returns the version if an epoch is used' do
-        check_version('1:1.8.3-2')
+      it "returns the version if an epoch is used" do
+        check_version("1:1.8.3-2")
       end
     end
 
@@ -146,7 +141,7 @@ Conflicts: wget-ssl
 
       it "gets the source package name from dpkg-deb correctly" do
         provider.load_current_resource
-        expect(provider.current_resource.package_name).to eq("f.o.o-pkg++2")
+        expect(provider.current_resource.package_name).to eq(["f.o.o-pkg++2"])
       end
     end
 
@@ -157,26 +152,62 @@ Conflicts: wget-ssl
 
       it "gets the source package version from dpkg-deb correctly when the package version has `~', `-', `+' or `.' characters" do
         provider.load_current_resource
-        expect(provider.candidate_version).to eq('1.2.3+3141592-1ubuntu1~lucid')
+        expect(provider.candidate_version).to eq(["1.2.3+3141592-1ubuntu1~lucid"])
       end
     end
 
-    it "should raise an exception if the source is not set but we are installing" do
-      new_resource = Chef::Resource::Package.new("wget")
-      provider.new_resource = new_resource
-      provider.load_current_resource
-      provider.define_resource_requirements
-      expect { provider.run_action(:install)}.to raise_error(Chef::Exceptions::Package)
+    describe "when the source is not set" do
+      let(:source) { nil }
+
+      it "should raise an exception if the source is not set but we are installing" do
+        expect { provider.run_action(:install) }.to raise_error(Chef::Exceptions::Package)
+      end
     end
 
     it "should return the current version installed if found by dpkg" do
+      allow(provider).to receive(:shell_out!).with("dpkg", "-s", package, timeout: 900, returns: [0, 1]).and_return(dpkg_s_status)
       provider.load_current_resource
-      expect(provider.current_resource.version).to eq("1.11.4-1ubuntu1")
+      expect(provider.current_resource.version).to eq(["1.11.4-1ubuntu1"])
     end
 
-    it "should raise an exception if dpkg fails to run" do
+    it "on new debian/ubuntu we get an exit(1) and no stdout from dpkg -s for uninstalled" do
+      dpkg_s_status = double(
+        exitstatus: 1, stdout: "", stderr: <<-EOF
+dpkg-query: package '#{package}' is not installed and no information is available
+Use dpkg --info (= dpkg-deb --info) to examine archive files,
+and dpkg --contents (= dpkg-deb --contents) to list their contents.
+        EOF
+      )
+      expect(provider).to receive(:shell_out!).with("dpkg", "-s", package, returns: [0, 1], timeout: 900).and_return(dpkg_s_status)
+      provider.load_current_resource
+      expect(provider.current_resource.version).to eq([nil])
+    end
+
+    it "on old debian/ubuntu we get an exit(0) and we get info on stdout from dpkg -s for uninstalled" do
+      dpkg_s_status = double(
+        exitstatus: 0, stderr: "", stdout: <<-EOF
+Package: #{package}
+Status: unknown ok not-installed
+Priority: extra
+Section: ruby
+        EOF
+      )
+      expect(provider).to receive(:shell_out!).with("dpkg", "-s", package, returns: [0, 1], timeout: 900).and_return(dpkg_s_status)
+      provider.load_current_resource
+      expect(provider.current_resource.version).to eq([nil])
+    end
+
+    it "and we should raise if we get any other exit codes from dpkg -s" do
+      dpkg_s_status = double(
+        exitstatus: 3, stderr: "i am very, very angry with you.  i'm very, very cross.  go to your room.", stdout: ""
+      )
+      expect(provider).to receive(:shell_out!).with("dpkg", "-s", package, returns: [0, 1], timeout: 900).and_raise(Mixlib::ShellOut::ShellCommandFailed)
+      expect { provider.load_current_resource }.to raise_error(Mixlib::ShellOut::ShellCommandFailed)
+    end
+
+    it "should raise an exception if dpkg-deb -W fails to run" do
       status = double(:stdout => "", :exitstatus => -1)
-      expect(provider).to receive(:shell_out_with_timeout!).with("dpkg-deb -W /tmp/wget_1.11.4-1ubuntu1_amd64.deb").and_raise(Mixlib::ShellOut::ShellCommandFailed)
+      expect(provider).to receive(:shell_out_compact_timeout!).with("dpkg-deb", "-W", "/tmp/wget_1.11.4-1ubuntu1_amd64.deb").and_raise(Mixlib::ShellOut::ShellCommandFailed)
       expect { provider.load_current_resource }.to raise_error(Mixlib::ShellOut::ShellCommandFailed)
     end
   end
@@ -184,72 +215,73 @@ Conflicts: wget-ssl
   describe Chef::Provider::Package::Dpkg, "install and upgrade" do
     it "should run dpkg -i with the package source" do
       expect(provider).to receive(:run_noninteractive).with(
-        "dpkg -i /tmp/wget_1.11.4-1ubuntu1_amd64.deb"
+        "dpkg", "-i", "/tmp/wget_1.11.4-1ubuntu1_amd64.deb"
       )
-      provider.install_package("wget", "1.11.4-1ubuntu1")
+      provider.load_current_resource
+      provider.run_action(:install)
     end
 
     it "should run dpkg -i if the package is a path and the source is nil" do
-      new_resource.name = "/tmp/wget_1.11.4-1ubuntu1_amd64.deb"
+      new_resource.name "/tmp/wget_1.11.4-1ubuntu1_amd64.deb"
       expect(provider).to receive(:run_noninteractive).with(
-        "dpkg -i /tmp/wget_1.11.4-1ubuntu1_amd64.deb"
+        "dpkg", "-i", "/tmp/wget_1.11.4-1ubuntu1_amd64.deb"
       )
-      provider.install_package("/tmp/wget_1.11.4-1ubuntu1_amd64.deb", "1.11.4-1ubuntu1")
+      provider.run_action(:install)
     end
 
     it "should run dpkg -i if the package is a path and the source is nil for an upgrade" do
-      new_resource.name = "/tmp/wget_1.11.4-1ubuntu1_amd64.deb"
+      new_resource.name "/tmp/wget_1.11.4-1ubuntu1_amd64.deb"
       expect(provider).to receive(:run_noninteractive).with(
-        "dpkg -i /tmp/wget_1.11.4-1ubuntu1_amd64.deb"
+        "dpkg", "-i", "/tmp/wget_1.11.4-1ubuntu1_amd64.deb"
       )
-      provider.upgrade_package("/tmp/wget_1.11.4-1ubuntu1_amd64.deb", "1.11.4-1ubuntu1")
+      provider.run_action(:upgrade)
     end
 
     it "should run dpkg -i with the package source and options if specified" do
+      new_resource.options "--force-yes"
       expect(provider).to receive(:run_noninteractive).with(
-        "dpkg -i --force-yes /tmp/wget_1.11.4-1ubuntu1_amd64.deb"
+        "dpkg", "-i", "--force-yes", "/tmp/wget_1.11.4-1ubuntu1_amd64.deb"
       )
-      allow(new_resource).to receive(:options).and_return("--force-yes")
-
-      provider.install_package("wget", "1.11.4-1ubuntu1")
+      provider.run_action(:install)
     end
+
     it "should upgrade by running install_package" do
-      expect(provider).to receive(:install_package).with("wget", "1.11.4-1ubuntu1")
-      provider.upgrade_package("wget", "1.11.4-1ubuntu1")
+      expect(provider).to receive(:install_package).with(["wget"], ["1.11.4-1ubuntu1"])
+      provider.upgrade_package(["wget"], ["1.11.4-1ubuntu1"])
     end
   end
 
   describe Chef::Provider::Package::Dpkg, "remove and purge" do
     it "should run dpkg -r to remove the package" do
       expect(provider).to receive(:run_noninteractive).with(
-        "dpkg -r wget"
+        "dpkg", "-r", "wget"
       )
-      provider.remove_package("wget", "1.11.4-1ubuntu1")
+      provider.remove_package(["wget"], ["1.11.4-1ubuntu1"])
     end
 
     it "should run dpkg -r to remove the package with options if specified" do
       expect(provider).to receive(:run_noninteractive).with(
-        "dpkg -r --force-yes wget"
+        "dpkg", "-r", "--force-yes", "wget"
       )
       allow(new_resource).to receive(:options).and_return("--force-yes")
 
-      provider.remove_package("wget", "1.11.4-1ubuntu1")
+      provider.remove_package(["wget"], ["1.11.4-1ubuntu1"])
     end
 
     it "should run dpkg -P to purge the package" do
       expect(provider).to receive(:run_noninteractive).with(
-        "dpkg -P wget"
+        "dpkg", "-P", "wget"
       )
-      provider.purge_package("wget", "1.11.4-1ubuntu1")
+      provider.purge_package(["wget"], ["1.11.4-1ubuntu1"])
     end
 
     it "should run dpkg -P to purge the package with options if specified" do
       expect(provider).to receive(:run_noninteractive).with(
-        "dpkg -P --force-yes wget"
+        "dpkg", "-P", "--force-yes", "wget"
       )
       allow(new_resource).to receive(:options).and_return("--force-yes")
 
-      provider.purge_package("wget", "1.11.4-1ubuntu1")
+      provider.purge_package(["wget"], ["1.11.4-1ubuntu1"])
     end
   end
 end

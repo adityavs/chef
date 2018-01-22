@@ -1,6 +1,6 @@
 #
-# Author:: Adam Edwards (<adamed@getchef.com>)
-# Copyright:: Copyright (c) 2014 Chef Software, Inc.
+# Author:: Adam Edwards (<adamed@chef.io>)
+# Copyright:: Copyright 2014-2016, Chef Software, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,24 +16,30 @@
 # limitations under the License.
 #
 
-require 'chef/exceptions'
-require 'chef/dsl/powershell'
+require "chef/exceptions"
+require "chef/dsl/powershell"
 
 class Chef
   class Resource
+    # Many DSC resources are comparable to built-in Chef resources. For example, both DSC and Chef have file, package,
+    # and service resources. The dsc_script resource is most useful for those DSC resources that do not have a direct
+    # comparison to a resource in Chef, such as the Archive resource, a custom DSC resource, an existing DSC script
+    # that performs an important task, and so on. Use the dsc_script resource to embed the code that defines a DSC
+    # configuration directly within a Chef recipe.
     class DscScript < Chef::Resource
       include Chef::DSL::Powershell
 
+      resource_name :dsc_script
       provides :dsc_script, os: "windows"
 
       default_action :run
 
-      def initialize(name, run_context=nil)
+      def initialize(name, run_context = nil)
         super
         @imports = {}
       end
 
-      def code(arg=nil)
+      def code(arg = nil)
         if arg && command
           raise ArgumentError, "Only one of 'code' and 'command' attributes may be specified"
         end
@@ -47,7 +53,7 @@ class Chef
         )
       end
 
-      def configuration_name(arg=nil)
+      def configuration_name(arg = nil)
         if arg && code
           raise ArgumentError, "Attribute `configuration_name` may not be set if `code` is set"
         end
@@ -58,7 +64,7 @@ class Chef
         )
       end
 
-      def command(arg=nil)
+      def command(arg = nil)
         if arg && code
           raise ArgumentError, "The 'code' and 'command' attributes may not be used together"
         end
@@ -69,7 +75,7 @@ class Chef
         )
       end
 
-      def configuration_data(arg=nil)
+      def configuration_data(arg = nil)
         if arg && configuration_data_script
           raise ArgumentError, "The 'configuration_data' and 'configuration_data_script' attributes may not be used together"
         end
@@ -80,7 +86,7 @@ class Chef
         )
       end
 
-      def configuration_data_script(arg=nil)
+      def configuration_data_script(arg = nil)
         if arg && configuration_data
           raise ArgumentError, "The 'configuration_data' and 'configuration_data_script' attributes may not be used together"
         end
@@ -91,11 +97,11 @@ class Chef
         )
       end
 
-      def imports(module_name=nil, *args)
+      def imports(module_name = nil, *args)
         if module_name
           @imports[module_name] ||= []
           if args.length == 0
-            @imports[module_name] << '*'
+            @imports[module_name] << "*"
           else
             @imports[module_name].push(*args)
           end
@@ -104,7 +110,7 @@ class Chef
         end
       end
 
-      def flags(arg=nil)
+      def flags(arg = nil)
         set_or_return(
           :flags,
           arg,
@@ -112,7 +118,7 @@ class Chef
         )
       end
 
-      def cwd(arg=nil)
+      def cwd(arg = nil)
         set_or_return(
           :cwd,
           arg,
@@ -120,7 +126,7 @@ class Chef
         )
       end
 
-      def environment(arg=nil)
+      def environment(arg = nil)
         set_or_return(
           :environment,
           arg,
@@ -128,7 +134,7 @@ class Chef
         )
       end
 
-      def timeout(arg=nil)
+      def timeout(arg = nil)
         set_or_return(
           :timeout,
           arg,

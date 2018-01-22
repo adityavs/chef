@@ -1,7 +1,7 @@
 #
-# Author:: Adam Jacob (<adam@opscode.com>)
-# Author:: Daniel DeLeo (<dan@opscode.com>)
-# Copyright:: Copyright (c) 2008, 2010 Opscode, Inc.
+# Author:: Adam Jacob (<adam@chef.io>)
+# Author:: Daniel DeLeo (<dan@chef.io>)
+# Copyright:: Copyright 2008-2016, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,41 +19,55 @@
 
 VERSION = IO.read(File.expand_path("../VERSION", __FILE__)).strip
 
-require 'rubygems'
-require 'chef-config/package_task'
-require 'rdoc/task'
-require_relative 'tasks/rspec'
-require_relative 'tasks/external_tests'
-require_relative 'tasks/maintainers'
+require "rubygems"
+require "chef/version"
+require "chef-config/package_task"
+require "rdoc/task"
+require_relative "tasks/rspec"
+require_relative "tasks/maintainers"
+require_relative "tasks/cbgb"
+require_relative "tasks/dependencies"
+require_relative "tasks/announce"
 
-ChefConfig::PackageTask.new(File.expand_path('..', __FILE__), 'Chef') do |package|
-  package.component_paths = ['chef-config']
+ChefConfig::PackageTask.new(File.expand_path("..", __FILE__), "Chef", "chef") do |package|
+  package.component_paths = ["chef-config"]
   package.generate_version_class = true
+  package.use_versionstring = true
 end
 
 task :pedant, :chef_zero_spec
 
 task :build_eventlog do
-  Dir.chdir 'ext/win32-eventlog/' do
-    system 'rake build'
+  Dir.chdir "ext/win32-eventlog/" do
+    system "rake build"
   end
 end
 
 task :register_eventlog do
-  Dir.chdir 'ext/win32-eventlog/' do
-    system 'rake register'
+  Dir.chdir "ext/win32-eventlog/" do
+    system "rake register"
   end
 end
 
 begin
-  require 'yard'
+  require "chefstyle"
+  require "rubocop/rake_task"
+  RuboCop::RakeTask.new(:style) do |task|
+    task.options += ["--display-cop-names", "--no-color"]
+  end
+rescue LoadError
+  puts "chefstyle/rubocop is not available.  gem install chefstyle to do style checking."
+end
+
+begin
+  require "yard"
   DOC_FILES = [ "README.rdoc", "LICENSE", "spec/tiny_server.rb", "lib/**/*.rb" ]
   namespace :yard do
     desc "Create YARD documentation"
 
     YARD::Rake::YardocTask.new(:html) do |t|
       t.files = DOC_FILES
-      t.options = ['--format', 'html']
+      t.options = ["--format", "html"]
     end
   end
 

@@ -1,6 +1,6 @@
 #
-# Author:: Steven Danna (<steve@opscode.com>)
-# Copyright:: Copyright (c) 2012 Opscode, Inc.
+# Author:: Steven Danna (<steve@chef.io>)
+# Copyright:: Copyright 2012-2016, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,27 +16,29 @@
 # limitations under the License.
 #
 
-require 'chef/knife'
+require "chef/knife"
 
 class Chef
   class Knife
     class UserReregister < Knife
 
       deps do
-        require 'chef/user_v1'
-        require 'chef/json_compat'
+        require "chef/user_v1"
+        require "chef/json_compat"
       end
 
       banner "knife user reregister USER (options)"
 
       def osc_11_warning
-<<-EOF
+        <<-EOF
 The Chef Server you are using does not support the username field.
 This means it is an Open Source 11 Server.
 knife user reregister for Open Source 11 Server is being deprecated.
 Open Source 11 Server user commands now live under the knife osc_user namespace.
 For backwards compatibility, we will forward this request to knife osc_user reregister.
 If you are using an Open Source 11 Server, please use that command to avoid this warning.
+NOTE: Backwards compatibility for Open Source 11 Server in these commands will be removed
+in Chef 15 which will be released April 2019.
 EOF
       end
 
@@ -83,7 +85,6 @@ EOF
             ui.msg key
           end
         end
-
       end
     end
   end

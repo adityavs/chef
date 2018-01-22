@@ -1,9 +1,9 @@
 #
-# Author:: Daniel DeLeo (<dan@opscode.com>)
+# Author:: Daniel DeLeo (<dan@chef.io>)
 # Author:: Jesse Campbell (<hikeit@gmail.com>)
-# Author:: Lamont Granquist (<lamont@opscode.com>)
-# Copyright:: Copyright (c) 2013 Jesse Campbell
-# Copyright:: Copyright (c) 2013 Opscode, Inc.
+# Author:: Lamont Granquist (<lamont@chef.io>)
+# Copyright:: Copyright 2013-2016, Jesse Campbell
+# Copyright:: Copyright 2013-2016, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,11 +19,11 @@
 # limitations under the License.
 #
 
-require 'stringio'
-require 'chef/file_cache'
-require 'chef/json_compat'
-require 'chef/digester'
-require 'chef/exceptions'
+require "stringio"
+require "chef/file_cache"
+require "chef/json_compat"
+require "chef/digester"
+require "chef/exceptions"
 
 class Chef
   class Provider
@@ -96,7 +96,7 @@ class Chef
         end
 
         def validate!(current_copy_checksum)
-          if current_copy_checksum.nil? or checksum != current_copy_checksum
+          if current_copy_checksum.nil? || checksum != current_copy_checksum
             reset!
             false
           else
@@ -172,14 +172,13 @@ class Chef
           # Scrub and truncate in accordance with the goals of keeping the name
           # human-readable but within the bounds of local file system
           # path length limits
-          uri.gsub(/\W/, '_')[0..63]
+          uri.gsub(/\W/, "_")[0..63]
         end
 
         def sanitized_cache_file_basename
           uri_sha2 = Chef::Digester.instance.generate_checksum(StringIO.new(uri))
-          cache_file_basename(uri_sha2[0,32])
+          cache_file_basename(uri_sha2[0, 32])
         end
-
 
         def sanitized_cache_file_basename_md5
           # Old way of creating the file basename

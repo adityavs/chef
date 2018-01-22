@@ -1,6 +1,6 @@
 #
 # Author:: Bryan McLellan <btm@loftninjas.org>
-# Copyright:: Copyright (c) 2014 Chef Software, Inc.
+# Copyright:: Copyright 2014-2016, Chef Software, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
+require "spec_helper"
 
 describe Chef::Resource::WindowsService, "initialize" do
   static_provider_resolution(
@@ -28,10 +28,6 @@ describe Chef::Resource::WindowsService, "initialize" do
   )
 
   let(:resource) { Chef::Resource::WindowsService.new("BITS") }
-
-  it "returns a Chef::Resource::WindowsService" do
-    expect(resource).to be_a_kind_of(Chef::Resource::WindowsService)
-  end
 
   it "sets the resource_name to :windows_service" do
     expect(resource.resource_name).to eql(:windows_service)

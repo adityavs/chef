@@ -1,6 +1,6 @@
 #
 # Author:: Bryan McLellan (btm@loftninjas.org)
-# Copyright:: Copyright (c) 2009 Bryan McLellan
+# Copyright:: Copyright 2009-2016, Bryan McLellan
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,34 +16,34 @@
 # limitations under the License.
 #
 
-require 'chef/provider/package'
-require 'chef/mixin/command'
-require 'chef/resource/package'
-require 'chef/mixin/get_source_from_package'
+require "chef/provider/package"
+require "chef/resource/package"
 
 class Chef
   class Provider
     class Package
       class Dpkg < Chef::Provider::Package
+        DPKG_REMOVED   = /^Status: deinstall ok config-files/
         DPKG_INSTALLED = /^Status: install ok installed/
-        DPKG_VERSION = /^Version: (.+)$/
+        DPKG_VERSION   = /^Version: (.+)$/
 
         provides :dpkg_package, os: "linux"
 
-        include Chef::Mixin::GetSourceFromPackage
+        use_multipackage_api
+        use_package_name_for_source
 
         def define_resource_requirements
           super
 
           requirements.assert(:install, :upgrade) do |a|
-            a.assertion { !new_resource.source.nil? }
+            a.assertion { !resolved_source_array.compact.empty? }
             a.failure_message Chef::Exceptions::Package, "#{new_resource} the source property is required for action :install or :upgrade"
           end
 
           requirements.assert(:install, :upgrade) do |a|
-            a.assertion { source_file_exist? }
-            a.failure_message Chef::Exceptions::Package, "#{new_resource} source file does not exist: #{new_resource.source}"
-            a.whyrun "Assuming it would have been previously created."
+            a.assertion { source_files_exist? }
+            a.failure_message Chef::Exceptions::Package, "#{new_resource} source file(s) do not exist: #{missing_sources}"
+            a.whyrun "Assuming they would have been previously created."
           end
         end
 
@@ -51,11 +51,11 @@ class Chef
           @current_resource = Chef::Resource::Package.new(new_resource.name)
           current_resource.package_name(new_resource.package_name)
 
-          if source_file_exist?
+          if source_files_exist?
             @candidate_version = get_candidate_version
             current_resource.package_name(get_package_name)
             # if the source file exists then our package_name is right
-            current_resource.version(get_current_version)
+            current_resource.version(get_current_version_from(current_package_name_array))
           elsif !installing?
             # we can't do this if we're installing with no source, because our package_name
             # is probably not right.
@@ -65,31 +65,26 @@ class Chef
             #
             # we don't error here on the dpkg command since we'll handle the exception or
             # the why-run message in define_resource_requirements.
-            current_resource.version(get_current_version)
+            current_resource.version(get_current_version_from(current_package_name_array))
           end
 
           current_resource
         end
 
         def install_package(name, version)
-          Chef::Log.info("#{new_resource} installing #{new_resource.source}")
-          run_noninteractive(
-            "dpkg -i#{expand_options(new_resource.options)} #{new_resource.source}"
-          )
+          sources = name.map { |n| name_sources[n] }
+          Chef::Log.info("#{new_resource} installing package(s): #{name.join(' ')}")
+          run_noninteractive("dpkg", "-i", *options, *sources)
         end
 
         def remove_package(name, version)
-          Chef::Log.info("#{new_resource} removing #{new_resource.package_name}")
-          run_noninteractive(
-            "dpkg -r#{expand_options(new_resource.options)} #{new_resource.package_name}"
-          )
+          Chef::Log.info("#{new_resource} removing package(s): #{name.join(' ')}")
+          run_noninteractive("dpkg", "-r", *options, *name)
         end
 
         def purge_package(name, version)
-          Chef::Log.info("#{new_resource} purging #{new_resource.package_name}")
-          run_noninteractive(
-            "dpkg -P#{expand_options(new_resource.options)} #{new_resource.package_name}"
-          )
+          Chef::Log.info("#{new_resource} purging packages(s): #{name.join(' ')}")
+          run_noninteractive("dpkg", "-P", *options, *name)
         end
 
         def upgrade_package(name, version)
@@ -98,22 +93,44 @@ class Chef
 
         def preseed_package(preseed_file)
           Chef::Log.info("#{new_resource} pre-seeding package installation instructions")
-          run_noninteractive("debconf-set-selections #{preseed_file}")
+          run_noninteractive("debconf-set-selections", *preseed_file)
         end
 
         def reconfig_package(name, version)
           Chef::Log.info("#{new_resource} reconfiguring")
-          run_noninteractive("dpkg-reconfigure #{name}")
+          run_noninteractive("dpkg-reconfigure", *name)
         end
+
+        # Override the superclass check.  Multiple sources are required here.
+        def check_resource_semantics!; end
 
         private
 
-        def get_current_version
-          Chef::Log.debug("#{new_resource} checking install state")
-          status = shell_out_with_timeout("dpkg -s #{current_resource.package_name}")
+        # compare 2 versions to each other to see which is newer.
+        # this differs from the standard package method because we
+        # need to be able to parse debian version strings which contain
+        # tildes which Gem cannot properly parse
+        #
+        # @return [Integer] 1 if v1 > v2. 0 if they're equal. -1 if v1 < v2
+        def version_compare(v1, v2)
+          if !shell_out_compact_timeout("dpkg", "--compare-versions", v1.to_s, "gt", v2.to_s).error?
+            1
+          elsif !shell_out_compact_timeout("dpkg", "--compare-versions", v1.to_s, "eq", v2.to_s).error?
+            0
+          else
+            -1
+          end
+        end
+
+        def read_current_version_of_package(package_name)
+          Chef::Log.debug("#{new_resource} checking install state of #{package_name}")
+          status = shell_out_compact_timeout!("dpkg", "-s", package_name, returns: [0, 1])
           package_installed = false
           status.stdout.each_line do |line|
             case line
+            when DPKG_REMOVED
+              # if we are 'purging' then we consider 'removed' to be 'installed'
+              package_installed = true if action == :purge
             when DPKG_INSTALLED
               package_installed = true
             when DPKG_VERSION
@@ -123,37 +140,97 @@ class Chef
               end
             end
           end
-          return nil
+          nil
+        end
+
+        def get_current_version_from(array)
+          array.map do |name|
+            read_current_version_of_package(name)
+          end
         end
 
         # Runs command via shell_out_with_timeout with magic environment to disable
-        # interactive prompts. Command is run with default localization rather
-        # than forcing locale to "C", so command output may not be stable.
-        def run_noninteractive(command)
-          shell_out_with_timeout!(command, :env => { "DEBIAN_FRONTEND" => "noninteractive" })
+        # interactive prompts.
+        def run_noninteractive(*command)
+          shell_out_compact_timeout!(*command, env: { "DEBIAN_FRONTEND" => "noninteractive" })
         end
 
-        def source_file_exist?
-          new_resource.source && ::File.exist?(new_resource.source)
+        # Returns true if all sources exist.  Returns false if any do not, or if no
+        # sources were specified.
+        #
+        # @return [Boolean] True if all sources exist
+        def source_files_exist?
+          resolved_source_array.all? { |s| s && ::File.exist?(s) }
         end
 
-        def pkginfo
-          @pkginfo ||=
+        # Helper to return all the nanes of the missing sources for error messages.
+        #
+        # @return [Array<String>] Array of missing sources
+        def missing_sources
+          resolved_source_array.select { |s| s.nil? || !::File.exist?(s) }
+        end
+
+        def current_package_name_array
+          [ current_resource.package_name ].flatten
+        end
+
+        # Helper to construct Hash of names-to-sources.
+        #
+        # @return [Hash] Mapping of package names to sources
+        def name_sources
+          @name_sources =
             begin
-              Chef::Log.debug("#{new_resource} checking dpkg status")
-              status = shell_out_with_timeout!("dpkg-deb -W #{new_resource.source}")
-              status.stdout.split("\t")
+              Hash[*package_name_array.zip(resolved_source_array).flatten]
             end
         end
 
+        # Helper to construct Hash of names-to-package-information.
+        #
+        # @return [Hash] Mapping of package names to package information
+        def name_pkginfo
+          @name_pkginfo ||=
+            begin
+              pkginfos = resolved_source_array.map do |src|
+                Chef::Log.debug("#{new_resource} checking #{src} dpkg status")
+                status = shell_out_compact_timeout!("dpkg-deb", "-W", src)
+                status.stdout
+              end
+              Hash[*package_name_array.zip(pkginfos).flatten]
+            end
+        end
+
+        def name_candidate_version
+          @name_candidate_version ||=
+            begin
+              Hash[name_pkginfo.map { |k, v| [k, v ? v.split("\t")[1].strip : nil] }]
+            end
+        end
+
+        def name_package_name
+          @name_package_name ||=
+            begin
+              Hash[name_pkginfo.map { |k, v| [k, v ? v.split("\t")[0] : nil] }]
+            end
+        end
+
+        # Return candidate version array from pkg-deb -W against the source file(s).
+        #
+        # @return [Array] Array of candidate versions read from the source files
         def get_candidate_version
-          pkginfo[1].strip unless pkginfo.empty?
+          package_name_array.map { |name| name_candidate_version[name] }
         end
 
+        # Return package names from the candidate source file(s).
+        #
+        # @return [Array] Array of actual package names read from the source files
         def get_package_name
-          pkginfo[0] unless pkginfo.empty?
+          package_name_array.map { |name| name_package_name[name] }
         end
 
+        # Since upgrade just calls install, this is a helper to determine
+        # if our action means that we'll be calling install_package.
+        #
+        # @return [Boolean] true if we're doing :install or :upgrade
         def installing?
           [:install, :upgrade].include?(action)
         end

@@ -1,7 +1,7 @@
 #
-# Author:: Joshua Timberman (<joshua@opscode.com>)
-# Author:: Tyler Cloke (<tyler@opscode.com>)
-# Copyright:: Copyright (c) 2009 Opscode, Inc
+# Author:: Joshua Timberman (<joshua@chef.io>)
+# Author:: Tyler Cloke (<tyler@chef.io>)
+# Copyright:: Copyright 2009-2017, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +17,11 @@
 # limitations under the License.
 #
 
-require 'chef/resource'
+require "chef/resource"
 
 class Chef
   class Resource
+    # Use the mount resource to manage a mounted file system.
     class Mount < Chef::Resource
 
       identity_attr :device
@@ -28,27 +29,32 @@ class Chef
       state_attrs :mount_point, :device_type, :fstype, :username, :password, :domain
 
       default_action :mount
-      allowed_actions :mount, :umount, :remount, :enable, :disable
+      allowed_actions :mount, :umount, :unmount, :remount, :enable, :disable
 
-      def initialize(name, run_context=nil)
+      # this is a poor API please do not re-use this pattern
+      property :supports, Hash, default: lazy { { remount: false } },
+                                coerce: proc { |x| x.is_a?(Array) ? x.each_with_object({}) { |i, m| m[i] = true } : x }
+
+      property :password, String, sensitive: true
+
+      def initialize(name, run_context = nil)
         super
         @mount_point = name
         @device = nil
         @device_type = :device
-        @fsck_device = '-'
+        @fsck_device = "-"
         @fstype = "auto"
         @options = ["defaults"]
         @dump = 0
         @pass = 2
         @mounted = false
         @enabled = false
-        @supports = { :remount => false }
         @username = nil
         @password = nil
         @domain = nil
       end
 
-      def mount_point(arg=nil)
+      def mount_point(arg = nil)
         set_or_return(
           :mount_point,
           arg,
@@ -56,7 +62,7 @@ class Chef
         )
       end
 
-      def device(arg=nil)
+      def device(arg = nil)
         set_or_return(
           :device,
           arg,
@@ -64,7 +70,7 @@ class Chef
         )
       end
 
-      def device_type(arg=nil)
+      def device_type(arg = nil)
         real_arg = arg.kind_of?(String) ? arg.to_sym : arg
         valid_devices = if RUBY_PLATFORM =~ /solaris/i
                           [ :device ]
@@ -78,7 +84,7 @@ class Chef
         )
       end
 
-      def fsck_device(arg=nil)
+      def fsck_device(arg = nil)
         set_or_return(
           :fsck_device,
           arg,
@@ -86,7 +92,7 @@ class Chef
         )
       end
 
-      def fstype(arg=nil)
+      def fstype(arg = nil)
         set_or_return(
           :fstype,
           arg,
@@ -94,7 +100,7 @@ class Chef
         )
       end
 
-      def options(arg=nil)
+      def options(arg = nil)
         ret = set_or_return(
                             :options,
                             arg,
@@ -102,13 +108,13 @@ class Chef
                             )
 
         if ret.is_a? String
-          ret.gsub(/,/, ' ').split(/ /)
+          ret.tr(",", " ").split(/ /)
         else
           ret
         end
       end
 
-      def dump(arg=nil)
+      def dump(arg = nil)
         set_or_return(
           :dump,
           arg,
@@ -116,7 +122,7 @@ class Chef
         )
       end
 
-      def pass(arg=nil)
+      def pass(arg = nil)
         set_or_return(
           :pass,
           arg,
@@ -124,7 +130,7 @@ class Chef
         )
       end
 
-      def mounted(arg=nil)
+      def mounted(arg = nil)
         set_or_return(
           :mounted,
           arg,
@@ -132,7 +138,7 @@ class Chef
         )
       end
 
-      def enabled(arg=nil)
+      def enabled(arg = nil)
         set_or_return(
           :enabled,
           arg,
@@ -140,17 +146,7 @@ class Chef
         )
       end
 
-      def supports(args={})
-        if args.is_a? Array
-          args.each { |arg| @supports[arg] = true }
-        elsif args.any?
-          @supports = args
-        else
-          @supports
-        end
-      end
-
-      def username(arg=nil)
+      def username(arg = nil)
         set_or_return(
           :username,
           arg,
@@ -158,15 +154,7 @@ class Chef
         )
       end
 
-      def password(arg=nil)
-        set_or_return(
-          :password,
-          arg,
-          :kind_of => [ String ]
-        )
-      end
-
-      def domain(arg=nil)
+      def domain(arg = nil)
         set_or_return(
           :domain,
           arg,

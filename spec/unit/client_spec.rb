@@ -1,8 +1,8 @@
 #
-# Author:: Adam Jacob (<adam@opscode.com>)
-# Author:: Tim Hinderliter (<tim@opscode.com>)
-# Author:: Christopher Walters (<cw@opscode.com>)
-# Copyright:: Copyright 2008-2010 Opscode, Inc.
+# Author:: Adam Jacob (<adam@chef.io>)
+# Author:: Tim Hinderliter (<tim@chef.io>)
+# Author:: Christopher Walters (<cw@chef.io>)
+# Copyright:: Copyright 2008-2017, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,13 +18,13 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
-require 'spec/support/shared/context/client'
-require 'spec/support/shared/examples/client'
+require "spec_helper"
+require "spec/support/shared/context/client"
+require "spec/support/shared/examples/client"
 
-require 'chef/run_context'
-require 'chef/rest'
-require 'rbconfig'
+require "chef/run_context"
+require "chef/server_api"
+require "rbconfig"
 
 class FooError < RuntimeError
 end
@@ -38,80 +38,84 @@ describe Chef::Client do
     end
 
     it "runs ohai with only the minimum required plugins" do
-      expected_filter = %w[fqdn machinename hostname platform platform_version os os_version]
+      expected_filter = %w{fqdn machinename hostname platform platform_version ohai_time os os_version}
       expect(ohai_system).to receive(:all_plugins).with(expected_filter)
       client.run_ohai
     end
   end
 
-  describe "authentication protocol selection" do
-    after do
-      Chef::Config[:authentication_protocol_version] = "1.0"
+  context "when Ohai tells us to fail" do
+    it "fails" do
+      ohai_system = Ohai::System.new
+      module Ohai::Exceptions
+        class CriticalPluginFailure < Error; end
+      end
+      expect(ohai_system).to receive(:all_plugins) { raise Ohai::Exceptions::CriticalPluginFailure }
+      expect { client.run_ohai }.to raise_error(SystemExit)
     end
+  end
 
-    context "when the node name is <= 90 bytes" do
-      it "does not force the authentication protocol to 1.1" do
-        Chef::Config[:node_name] = ("f" * 90)
-        # ugly that this happens as a side effect of a getter :(
-        client.node_name
-        expect(Chef::Config[:authentication_protocol_version]).to eq("1.0")
+  describe "authentication protocol selection" do
+    context "when FIPS is disabled" do
+      before do
+        Chef::Config[:fips] = false
+      end
+
+      it "defaults to 1.1" do
+        expect(Chef::Config[:authentication_protocol_version]).to eq("1.1")
       end
     end
+    context "when FIPS is enabled" do
+      before do
+        Chef::Config[:fips] = true
+      end
 
-    context "when the node name is > 90 bytes" do
-      it "sets the authentication protocol to version 1.1" do
-        Chef::Config[:node_name] = ("f" * 91)
-        # ugly that this happens as a side effect of a getter :(
-        client.node_name
-        expect(Chef::Config[:authentication_protocol_version]).to eq("1.1")
+      it "defaults to 1.3" do
+        expect(Chef::Config[:authentication_protocol_version]).to eq("1.3")
+      end
+
+      after do
+        Chef::Config[:fips] = false
       end
     end
   end
 
   describe "configuring output formatters" do
     context "when no formatter has been configured" do
-      context "and STDOUT is a TTY" do
-        before do
-          allow(STDOUT).to receive(:tty?).and_return(true)
-        end
-
-        it "configures the :doc formatter" do
-          expect(client.formatters_for_run).to eq([[:doc]])
-        end
-
-        context "and force_logger is set" do
-          before do
-            Chef::Config[:force_logger] = true
-          end
-
-          it "configures the :null formatter" do
-            expect(Chef::Config[:force_logger]).to be_truthy
-            expect(client.formatters_for_run).to eq([[:null]])
-          end
-
-        end
-
+      it "configures the :doc formatter" do
+        expect(client.formatters_for_run).to eq([[:doc]])
       end
 
-      context "and STDOUT is not a TTY" do
+      context "and force_logger is set" do
         before do
-          allow(STDOUT).to receive(:tty?).and_return(false)
+          Chef::Config[:force_logger] = true
         end
 
         it "configures the :null formatter" do
           expect(client.formatters_for_run).to eq([[:null]])
         end
+      end
 
-        context "and force_formatter is set" do
-          before do
-            Chef::Config[:force_formatter] = true
-          end
-          it "it configures the :doc formatter" do
-            expect(client.formatters_for_run).to eq([[:doc]])
-          end
+      context "and force_formatter is set" do
+        before do
+          Chef::Config[:force_formatter] = true
+        end
+
+        it "configures the :doc formatter" do
+          expect(client.formatters_for_run).to eq([[:doc]])
         end
       end
 
+      context "both are set" do
+        before do
+          Chef::Config[:force_formatter] = true
+          Chef::Config[:force_logger] = true
+        end
+
+        it "configures the :doc formatter" do
+          expect(client.formatters_for_run).to eq([[:doc]])
+        end
+      end
     end
 
     context "when a formatter is configured" do
@@ -175,21 +179,21 @@ describe Chef::Client do
 
     context "when an override run list is given" do
       it "permits spaces in overriding run list" do
-        Chef::Client.new(nil, :override_runlist => 'role[a], role[b]')
+        Chef::Client.new(nil, :override_runlist => "role[a], role[b]")
       end
 
       describe "calling run" do
         include_examples "a successful client run" do
-          let(:client_opts) { {:override_runlist => "recipe[override_recipe]"} }
+          let(:client_opts) { { :override_runlist => "recipe[override_recipe]" } }
 
           def stub_for_sync_cookbooks
             # --Client#setup_run_context
             # ---Client#sync_cookbooks -- downloads the list of cookbooks to sync
             #
             expect_any_instance_of(Chef::CookbookSynchronizer).to receive(:sync_cookbooks)
-            expect(Chef::REST).to receive(:new).with(Chef::Config[:chef_server_url]).and_return(http_cookbook_sync)
+            expect(Chef::ServerAPI).to receive(:new).with(Chef::Config[:chef_server_url], version_class: Chef::CookbookManifestVersions).and_return(http_cookbook_sync)
             expect(http_cookbook_sync).to receive(:post).
-              with("environments/_default/cookbook_versions", {:run_list => ["override_recipe"]}).
+              with("environments/_default/cookbook_versions", { :run_list => ["override_recipe"] }).
               and_return({})
           end
 
@@ -214,16 +218,16 @@ describe Chef::Client do
 
       include_examples "a successful client run" do
         let(:new_runlist) { "recipe[new_run_list_recipe]" }
-        let(:client_opts) { {:runlist => new_runlist} }
+        let(:client_opts) { { :runlist => new_runlist } }
 
         def stub_for_sync_cookbooks
           # --Client#setup_run_context
           # ---Client#sync_cookbooks -- downloads the list of cookbooks to sync
           #
           expect_any_instance_of(Chef::CookbookSynchronizer).to receive(:sync_cookbooks)
-          expect(Chef::REST).to receive(:new).with(Chef::Config[:chef_server_url]).and_return(http_cookbook_sync)
+          expect(Chef::ServerAPI).to receive(:new).with(Chef::Config[:chef_server_url], version_class: Chef::CookbookManifestVersions).and_return(http_cookbook_sync)
           expect(http_cookbook_sync).to receive(:post).
-            with("environments/_default/cookbook_versions", {:run_list => ["new_run_list_recipe"]}).
+            with("environments/_default/cookbook_versions", { :run_list => ["new_run_list_recipe"] }).
             and_return({})
         end
 
@@ -238,7 +242,7 @@ describe Chef::Client do
     describe "when converge completes successfully" do
       include_context "a client run"
       include_context "converge completed"
-      context 'when audit mode is enabled' do
+      context "when audit mode is enabled" do
         describe "when audit phase errors" do
           include_context "audit phase failed with error"
           include_examples "a completed run with audit failure" do
@@ -354,9 +358,9 @@ describe Chef::Client do
 
       # build_node will call Node#expand! with server, which will
       # eventually hit the server to expand the included role.
-      mock_chef_rest = double("Chef::REST")
-      expect(mock_chef_rest).to receive(:get_rest).with("roles/role_containing_cookbook1").and_return(role_containing_cookbook1)
-      expect(Chef::REST).to receive(:new).and_return(mock_chef_rest)
+      mock_chef_rest = double("Chef::ServerAPI")
+      expect(mock_chef_rest).to receive(:get).with("roles/role_containing_cookbook1").and_return(role_containing_cookbook1.to_hash)
+      expect(Chef::ServerAPI).to receive(:new).and_return(mock_chef_rest)
 
       # check pre-conditions.
       expect(node[:roles]).to be_nil
@@ -387,18 +391,66 @@ describe Chef::Client do
       expect(node.chef_environment).to eq("_default")
       Chef::Config[:environment] = "A"
 
-      test_env = Chef::Environment.new
-      test_env.name("A")
+      test_env = { "name" => "A" }
 
-      mock_chef_rest = double("Chef::REST")
-      expect(mock_chef_rest).to receive(:get_rest).with("environments/A").and_return(test_env)
-      expect(Chef::REST).to receive(:new).and_return(mock_chef_rest)
+      mock_chef_rest = double("Chef::ServerAPI")
+      expect(mock_chef_rest).to receive(:get).with("environments/A").and_return(test_env)
+      expect(Chef::ServerAPI).to receive(:new).and_return(mock_chef_rest)
       allow(client.policy_builder).to receive(:node).and_return(node)
       client.policy_builder.select_implementation(node)
       allow(client.policy_builder.implementation).to receive(:node).and_return(node)
       expect(client.build_node).to eq(node)
 
       expect(node.chef_environment).to eq("A")
+    end
+  end
+
+  describe "load_required_recipe" do
+    let(:rest)        { double("Chef::ServerAPI (required recipe)") }
+    let(:run_context) { double("Chef::RunContext") }
+    let(:recipe)      { double("Chef::Recipe (required recipe)") }
+    let(:required_recipe) do
+      <<EOM
+fake_recipe_variable = "for reals"
+EOM
+    end
+
+    context "when required_recipe is configured" do
+
+      before(:each) do
+        expect(rest).to receive(:get).with("required_recipe").and_return(required_recipe)
+        expect(Chef::Recipe).to receive(:new).with(nil, nil, run_context).and_return(recipe)
+        expect(recipe).to receive(:from_file)
+      end
+
+      it "fetches the recipe and adds it to the run context" do
+        client.load_required_recipe(rest, run_context)
+      end
+
+      context "when the required_recipe has bad contents" do
+        let(:required_recipe) do
+          <<EOM
+this is not a recipe
+EOM
+        end
+        it "should not raise an error" do
+          expect { client.load_required_recipe(rest, run_context) }.not_to raise_error()
+        end
+      end
+    end
+
+    context "when required_recipe returns 404" do
+      let(:http_response) { Net::HTTPNotFound.new("1.1", "404", "Not Found") }
+      let(:http_exception) { Net::HTTPServerException.new('404 "Not Found"', http_response) }
+
+      before(:each) do
+        expect(rest).to receive(:get).with("required_recipe").and_raise(http_exception)
+      end
+
+      it "should log and continue on" do
+        expect(Chef::Log).to receive(:debug)
+        client.load_required_recipe(rest, run_context)
+      end
     end
   end
 
@@ -462,7 +514,7 @@ describe Chef::Client do
 
   describe "assert_cookbook_path_not_empty" do
     before do
-      Chef::Config[:solo] = true
+      Chef::Config[:solo_legacy_mode] = true
       Chef::Config[:cookbook_path] = ["/path/to/invalid/cookbook_path"]
     end
 
@@ -518,7 +570,7 @@ describe Chef::Client do
       allow_any_instance_of(Chef::RunLock).to receive(:save_pid).and_raise(NoMethodError)
     end
 
-    context 'when audit mode is enabled' do
+    context "when audit mode is enabled" do
       before do
         Chef::Config[:audit_mode] = :enabled
       end
@@ -531,7 +583,7 @@ describe Chef::Client do
       end
     end
 
-    context 'when audit mode is disabled' do
+    context "when audit mode is disabled" do
       before do
         Chef::Config[:audit_mode] = :disabled
       end

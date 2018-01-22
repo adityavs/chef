@@ -1,6 +1,6 @@
 #
-# Author:: Bryan McLellan <btm@opscode.com>
-# Copyright:: Copyright (c) 2012 Opscode, Inc.
+# Author:: Bryan McLellan <btm@chef.io>
+# Copyright:: Copyright 2012-2016, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
-require 'support/shared/unit/resource/static_provider_resolution'
+require "spec_helper"
+require "support/shared/unit/resource/static_provider_resolution"
 
 describe Chef::Resource::IpsPackage, "initialize" do
 
@@ -26,15 +26,17 @@ describe Chef::Resource::IpsPackage, "initialize" do
     provider: Chef::Provider::Package::Ips,
     name: :ips_package,
     action: :install,
-    os: "solaris2",
+    os: "solaris2"
   )
 
-  before(:each) do
-    @resource = Chef::Resource::IpsPackage.new("crypto/gnupg")
+  let(:resource) { Chef::Resource::IpsPackage.new("crypto/gnupg") }
+
+  it "is a subclass of Chef::Resource::Package" do
+    expect(resource).to be_a_kind_of(Chef::Resource::Package)
   end
 
   it "should support accept_license" do
-    @resource.accept_license(true)
-    expect(@resource.accept_license).to eql(true)
+    resource.accept_license(true)
+    expect(resource.accept_license).to eql(true)
   end
 end

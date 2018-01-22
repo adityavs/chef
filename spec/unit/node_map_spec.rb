@@ -1,6 +1,6 @@
 #
 # Author:: Lamont Granquist (<lamont@chef.io>)
-# Copyright:: Copyright (c) 2014 Chef Software, Inc.
+# Copyright:: Copyright 2014-2017, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
-require 'chef/node_map'
+require "spec_helper"
+require "chef/node_map"
 
 describe Chef::NodeMap do
 
@@ -27,7 +27,7 @@ describe Chef::NodeMap do
 
   describe "with a bad filter name" do
     it "should raise an error" do
-      expect{ node_map.set(node, :thing, on_platform_family: 'rhel') }.to raise_error
+      expect { node_map.set(node, :thing, on_platform_family: "rhel") }.to raise_error(ArgumentError)
     end
   end
 
@@ -101,6 +101,40 @@ describe Chef::NodeMap do
     end
   end
 
+  describe "platform version checks" do
+    before do
+      node_map.set(:thing, :foo, platform_family: "rhel", platform_version: ">= 7")
+    end
+
+    it "handles non-x.y.z platform versions without throwing an exception" do
+      allow(node).to receive(:[]).with(:platform_family).and_return("rhel")
+      allow(node).to receive(:[]).with(:platform_version).and_return("7.19.2.2F")
+      expect(node_map.get(node, :thing)).to eql(:foo)
+    end
+
+    it "handles non-x.y.z platform versions without throwing an exception when the match fails" do
+      allow(node).to receive(:[]).with(:platform_family).and_return("rhel")
+      allow(node).to receive(:[]).with(:platform_version).and_return("4.19.2.2F")
+      expect(node_map.get(node, :thing)).to eql(nil)
+    end
+  end
+
+  describe "ordering classes" do
+    class Foo; end
+    class Bar; end
+    it "orders them alphabetically when they're set in the reverse order" do
+      node_map.set(:thing, Foo)
+      node_map.set(:thing, Bar)
+      expect(node_map.get(node, :thing)).to eql(Bar)
+    end
+
+    it "orders them alphabetically when they're set in alphabetic order" do
+      node_map.set(:thing, Bar)
+      node_map.set(:thing, Foo)
+      expect(node_map.get(node, :thing)).to eql(Bar)
+    end
+  end
+
   describe "with a block doing platform_version checks" do
     before do
       node_map.set(:thing, :foo, platform_family: "rhel") do |node|
@@ -142,28 +176,6 @@ describe Chef::NodeMap do
         allow(node).to receive(:[]).with(:platform_version).and_return("7.0")
         expect(node_map.get(node, :thing)).to eql(:foo)
       end
-    end
-  end
-
-  describe "resource back-compat testing" do
-    before :each do
-      Chef::Config[:treat_deprecation_warnings_as_errors] = false
-    end
-
-    it "should handle :on_platforms => :all" do
-      node_map.set(:chef_gem, :foo, :on_platforms => :all)
-      allow(node).to receive(:[]).with(:platform).and_return("windows")
-      expect(node_map.get(node, :chef_gem)).to eql(:foo)
-    end
-    it "should handle :on_platforms => [ 'windows' ]" do
-      node_map.set(:dsc_script, :foo, :on_platforms => [ 'windows' ])
-      allow(node).to receive(:[]).with(:platform).and_return("windows")
-      expect(node_map.get(node, :dsc_script)).to eql(:foo)
-    end
-    it "should handle :on_platform => :all" do
-      node_map.set(:link, :foo, :on_platform => :all)
-      allow(node).to receive(:[]).with(:platform).and_return("windows")
-      expect(node_map.get(node, :link)).to eql(:foo)
     end
   end
 

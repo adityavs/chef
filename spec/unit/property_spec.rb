@@ -1,4 +1,4 @@
-require 'support/shared/integration/integration_helper'
+require "support/shared/integration/integration_helper"
 
 describe "Chef::Resource.property" do
   include IntegrationSupport
@@ -8,12 +8,15 @@ describe "Chef::Resource.property" do
     def self.next_resource_name
       "chef_resource_property_spec_#{@i += 1}"
     end
+
     def self.reset_index
       @current_index = 0
     end
+
     def self.current_index
       @current_index
     end
+
     def self.next_index
       @current_index += 1
     end
@@ -46,15 +49,15 @@ describe "Chef::Resource.property" do
   end
 
   def self.english_join(values)
-    return '<nothing>' if values.size == 0
+    return "<nothing>" if values.size == 0
     return values[0].inspect if values.size == 1
     "#{values[0..-2].map { |v| v.inspect }.join(", ")} and #{values[-1].inspect}"
   end
 
   def self.with_property(*properties, &block)
-    tags_index = properties.find_index { |p| !p.is_a?(String)}
+    tags_index = properties.find_index { |p| !p.is_a?(String) }
     if tags_index
-      properties, tags = properties[0..tags_index-1], properties[tags_index..-1]
+      properties, tags = properties[0..tags_index - 1], properties[tags_index..-1]
     else
       tags = []
     end
@@ -74,17 +77,15 @@ describe "Chef::Resource.property" do
   end
 
   # Basic properties
-  with_property ':bare_property' do
+  with_property ":bare_property" do
     it "can be set" do
       expect(resource.bare_property 10).to eq 10
       expect(resource.bare_property).to eq 10
     end
-    it "emits a deprecation warning and does a get, if set to nil" do
+    it "nil does a set" do
       expect(resource.bare_property 10).to eq 10
-      expect { resource.bare_property nil }.to raise_error Chef::Exceptions::DeprecatedFeatureError
-      Chef::Config[:treat_deprecation_warnings_as_errors] = false
-      expect(resource.bare_property nil).to eq 10
-      expect(resource.bare_property).to eq 10
+      expect(resource.bare_property nil).to eq nil
+      expect(resource.bare_property).to eq nil
     end
     it "can be updated" do
       expect(resource.bare_property 10).to eq 10
@@ -92,7 +93,7 @@ describe "Chef::Resource.property" do
       expect(resource.bare_property).to eq 20
     end
     it "can be set with =" do
-      expect(resource.bare_property 10).to eq 10
+      expect(resource.bare_property = 10).to eq 10
       expect(resource.bare_property).to eq 10
     end
     it "can be set to nil with =" do
@@ -107,6 +108,16 @@ describe "Chef::Resource.property" do
     end
   end
 
+  with_property ":Straße" do
+    it "properties with UTF-8 in their name work" do
+      expect(resource.Straße).to eql(nil)
+      expect(resource.Straße "foo").to eql("foo")
+      expect(resource.Straße).to eql("foo")
+      expect(resource.Straße = "bar").to eql("bar")
+      expect(resource.Straße).to eql("bar")
+    end
+  end
+
   with_property ":x, name_property: true" do
     context "and subclass" do
       let(:subresource_class) do
@@ -116,7 +127,7 @@ describe "Chef::Resource.property" do
         end
       end
       let(:subresource) do
-        subresource_class.new('blah')
+        subresource_class.new("blah")
       end
 
       context "with property :x on the subclass" do
@@ -127,7 +138,7 @@ describe "Chef::Resource.property" do
         end
 
         it "x is still name_property" do
-          expect(subresource.x).to eq 'blah'
+          expect(subresource.x).to eq "blah"
         end
       end
 
@@ -166,7 +177,7 @@ describe "Chef::Resource.property" do
         end
       end
       let(:subresource) do
-        subresource_class.new('blah')
+        subresource_class.new("blah")
       end
 
       it "x is inherited" do
@@ -178,7 +189,7 @@ describe "Chef::Resource.property" do
       end
 
       it "x's validation is inherited" do
-        expect { subresource.x 'ohno' }.to raise_error Chef::Exceptions::ValidationFailed
+        expect { subresource.x "ohno" }.to raise_error Chef::Exceptions::ValidationFailed
       end
 
       context "with property :y on the subclass" do
@@ -203,7 +214,7 @@ describe "Chef::Resource.property" do
           expect(subresource_class.properties[:y]).not_to be_nil
         end
         it "y is not on the superclass" do
-          expect { resource_class.y 10 }.to raise_error
+          expect { resource_class.y 10 }.to raise_error NoMethodError
           expect(resource_class.properties[:y]).to be_nil
         end
       end
@@ -225,7 +236,7 @@ describe "Chef::Resource.property" do
         end
 
         it "x's validation is inherited" do
-          expect { subresource.x 'ohno' }.to raise_error Chef::Exceptions::ValidationFailed
+          expect { subresource.x "ohno" }.to raise_error Chef::Exceptions::ValidationFailed
         end
       end
 
@@ -250,7 +261,7 @@ describe "Chef::Resource.property" do
         end
 
         it "x's validation is inherited" do
-          expect { subresource.x 'ohno' }.to raise_error Chef::Exceptions::ValidationFailed
+          expect { subresource.x "ohno" }.to raise_error Chef::Exceptions::ValidationFailed
         end
       end
 
@@ -272,12 +283,12 @@ describe "Chef::Resource.property" do
 
         it "x's validation is overwritten" do
           expect { subresource.x 10 }.to raise_error Chef::Exceptions::ValidationFailed
-          expect(subresource.x 'ohno').to eq 'ohno'
-          expect(subresource.x).to eq 'ohno'
+          expect(subresource.x "ohno").to eq "ohno"
+          expect(subresource.x).to eq "ohno"
         end
 
         it "the superclass's validation for x is still there" do
-          expect { resource.x 'ohno' }.to raise_error Chef::Exceptions::ValidationFailed
+          expect { resource.x "ohno" }.to raise_error Chef::Exceptions::ValidationFailed
           expect(resource.x 10).to eq 10
           expect(resource.x).to eq 10
         end
@@ -290,14 +301,14 @@ describe "Chef::Resource.property" do
       expect(resource.property_is_set?(:name)).to be_truthy
       resource.reset_property(:name)
       expect(resource.property_is_set?(:name)).to be_falsey
-      expect(resource.name).to be_nil
+      expect { resource.name }.to raise_error Chef::Exceptions::ValidationFailed
     end
 
     it "when referencing an undefined property, reset_property(:x) raises an error" do
       expect { resource.reset_property(:x) }.to raise_error(ArgumentError)
     end
 
-    with_property ':x' do
+    with_property ":x" do
       it "when the resource is newly created, reset_property(:x) does nothing" do
         expect(resource.property_is_set?(:x)).to be_falsey
         resource.reset_property(:x)
@@ -313,7 +324,7 @@ describe "Chef::Resource.property" do
       end
     end
 
-    with_property ':x, Integer' do
+    with_property ":x, Integer" do
       it "when the resource is newly created, reset_property(:x) does nothing" do
         expect(resource.property_is_set?(:x)).to be_falsey
         resource.reset_property(:x)
@@ -329,7 +340,7 @@ describe "Chef::Resource.property" do
       end
     end
 
-    with_property ':x, default: 10' do
+    with_property ":x, default: 10" do
       it "when the resource is newly created, reset_property(:x) does nothing" do
         expect(resource.property_is_set?(:x)).to be_falsey
         resource.reset_property(:x)
@@ -344,7 +355,7 @@ describe "Chef::Resource.property" do
       end
     end
 
-    with_property ':x, default: lazy { 10 }' do
+    with_property ":x, default: lazy { 10 }" do
       it "when the resource is newly created, reset_property(:x) does nothing" do
         expect(resource.property_is_set?(:x)).to be_falsey
         resource.reset_property(:x)
@@ -369,7 +380,7 @@ describe "Chef::Resource.property" do
       expect { resource.property_is_set?(:x) }.to raise_error(ArgumentError)
     end
 
-    with_property ':x' do
+    with_property ":x" do
       it "when the resource is newly created, property_is_set?(:x) is false" do
         expect(resource.property_is_set?(:x)).to be_falsey
       end
@@ -391,7 +402,7 @@ describe "Chef::Resource.property" do
       end
     end
 
-    with_property ':x, default: 10' do
+    with_property ":x, default: 10" do
       it "when the resource is newly created, property_is_set?(:x) is false" do
         expect(resource.property_is_set?(:x)).to be_falsey
       end
@@ -413,7 +424,7 @@ describe "Chef::Resource.property" do
       end
     end
 
-    with_property ':x, default: nil' do
+    with_property ":x, default: nil" do
       it "when the resource is newly created, property_is_set?(:x) is false" do
         expect(resource.property_is_set?(:x)).to be_falsey
       end
@@ -435,7 +446,7 @@ describe "Chef::Resource.property" do
       end
     end
 
-    with_property ':x, default: lazy { 10 }' do
+    with_property ":x, default: lazy { 10 }" do
       it "when the resource is newly created, property_is_set?(:x) is false" do
         expect(resource.property_is_set?(:x)).to be_falsey
       end
@@ -455,7 +466,7 @@ describe "Chef::Resource.property" do
   end
 
   context "Chef::Resource::Property#default" do
-    with_property ':x, default: 10' do
+    with_property ":x, default: 10" do
       it "when x is set, it returns its value" do
         expect(resource.x 20).to eq 20
         expect(resource.property_is_set?(:x)).to be_truthy
@@ -479,68 +490,104 @@ describe "Chef::Resource.property" do
             resource_name new_resource_name
           end
         end
-        let(:subresource) { subresource_class.new('blah') }
+        let(:subresource) { subresource_class.new("blah") }
         it "The default is inherited" do
           expect(subresource.x).to eq 10
         end
       end
     end
 
-    with_property ':x, default: 10, identity: true' do
+    with_property ":x, default: 10, identity: true" do
       it "when x is not set, it is included in identity" do
         expect(resource.identity).to eq(10)
       end
     end
 
-    with_property ':x, default: 1, identity: true', ':y, default: 2, identity: true' do
+    with_property ":x, default: 1, identity: true", ":y, default: 2, identity: true" do
       it "when x is not set, it is still included in identity" do
         resource.y 20
         expect(resource.identity).to eq(x: 1, y: 20)
       end
     end
 
-    with_property ':x, default: nil' do
+    with_property ":x, default: nil" do
       it "when x is not set, it returns nil" do
         expect(resource.x).to be_nil
       end
     end
 
-    with_property ':x' do
+    with_property ":x" do
       it "when x is not set, it returns nil" do
         expect(resource.x).to be_nil
+      end
+    end
+
+    context "string default" do
+      with_property ":x, default: ''" do
+        it "when x is not set, it returns ''" do
+          expect(resource.x).to eq ""
+        end
+        it "x is immutable" do
+          expect { resource.x << "foo" }.to raise_error(RuntimeError, "can't modify frozen String")
+        end
+      end
+
+      with_property ":x, default: lazy { '' }" do
+        it "x is immutable" do
+          expect(resource.x).to eq ""
+          resource.x << "foo"
+          expect(resource.x).to eq "foo"
+          expect(resource_class.new("other").x).to eq ""
+        end
       end
     end
 
     context "hash default" do
-      context "(deprecations allowed)" do
-        before { Chef::Config[:treat_deprecation_warnings_as_errors] = false }
-
-        with_property ':x, default: {}' do
-          it "when x is not set, it returns {}" do
-            expect(resource.x).to eq({})
-          end
-          it "The same exact value is returned multiple times in a row" do
-            value = resource.x
-            expect(value).to eq({})
-            expect(resource.x.object_id).to eq(value.object_id)
-          end
-          it "Multiple instances of x receive the exact same value" do
-            expect(resource.x.object_id).to eq(resource_class.new('blah2').x.object_id)
-          end
-        end
-      end
-
-      with_property ':x, default: lazy { {} }' do
+      with_property ":x, default: {}" do
         it "when x is not set, it returns {}" do
           expect(resource.x).to eq({})
         end
-        # it "The value is different each time it is called" do
-        #   value = resource.x
-        #   expect(value).to eq({})
-        #   expect(resource.x.object_id).not_to eq(value.object_id)
-        # end
+        it "x is immutable" do
+          expect { resource.x["foo"] = "bar" }.to raise_error(RuntimeError, "can't modify frozen Hash")
+        end
+        it "The same exact value is returned multiple times in a row" do
+          value = resource.x
+          expect(value).to eq({})
+          expect(resource.x.object_id).to eq(value.object_id)
+        end
+        it "Multiple instances of x receive the exact same value" do
+          expect(resource.x.object_id).to eq(resource_class.new("blah2").x.object_id)
+        end
+      end
+
+      with_property ":x, default: lazy { {} }" do
+        it "when x is not set, it returns {}" do
+          expect(resource.x).to eq({})
+        end
+        it "The value is the same each time it is called" do
+          value = resource.x
+          expect(value).to eq({})
+          expect(resource.x.object_id).to eq(value.object_id)
+        end
         it "Multiple instances of x receive different values" do
-          expect(resource.x.object_id).not_to eq(resource_class.new('blah2').x.object_id)
+          expect(resource.x.object_id).not_to eq(resource_class.new("blah2").x.object_id)
+        end
+      end
+    end
+
+    context "complex, nested default" do
+      with_property ":x, default: [{foo: 'bar'}]" do
+        it "when x is not set, it returns [{foo: 'bar'}]" do
+          expect(resource.x).to eq([{ foo: "bar" }])
+        end
+        it "x is immutable" do
+          expect { resource.x << :other }.to raise_error(RuntimeError, "can't modify frozen Array")
+        end
+        it "x.first is immutable" do
+          expect { resource.x.first[:foo] = "other" }.to raise_error(RuntimeError, "can't modify frozen Hash")
+        end
+        it "x.first[:foo] is immutable" do
+          expect { resource.x.first[:foo] << "other" }.to raise_error(RuntimeError, "can't modify frozen String")
         end
       end
     end
@@ -549,22 +596,22 @@ describe "Chef::Resource.property" do
       before do
         resource_class.class_eval do
           def self.blah
-            'class'
+            "class"
           end
+
           def blah
             "#{name}#{next_index}"
           end
         end
       end
 
-      with_property ':x, default: lazy { blah }' do
+      with_property ":x, default: lazy { blah }" do
         it "x is run in context of the instance" do
           expect(resource.x).to eq "blah1"
         end
         it "x is run in the context of each instance it is run in" do
           expect(resource.x).to eq "blah1"
-          expect(resource_class.new('another').x).to eq "another2"
-          # expect(resource.x).to eq "blah3"
+          expect(resource_class.new("another").x).to eq "another2"
         end
       end
 
@@ -574,27 +621,14 @@ describe "Chef::Resource.property" do
         end
         it "x is passed the value of each instance it is run in" do
           expect(resource.x).to eq "classblah1"
-          expect(resource_class.new('another').x).to eq "classanother2"
-          # expect(resource.x).to eq "classblah3"
+          expect(resource_class.new("another").x).to eq "classanother2"
         end
       end
     end
 
     context "validation of defaults" do
-      with_property ':x, String, default: 10' do
-        it "when the resource is created, no error is raised" do
-          resource
-        end
-        it "when x is set, no error is raised" do
-          expect(resource.x 'hi').to eq 'hi'
-          expect(resource.x).to eq 'hi'
-        end
-        it "when x is retrieved, no validation error is raised" do
-          expect(resource.x).to eq 10
-        end
-        # it "when x is retrieved, a validation error is raised" do
-        #   expect { resource.x }.to raise_error Chef::Exceptions::ValidationFailed
-        # end
+      it "When a class is declared with property :x, String, default: 10, it immediately fails validation" do
+        expect { resource_class.class_eval { property :x, String, default: 10 } }.to raise_error Chef::Exceptions::ValidationFailed
       end
 
       with_property ":x, String, default: lazy { Namer.next_index }" do
@@ -602,43 +636,31 @@ describe "Chef::Resource.property" do
           resource
         end
         it "when x is set, no error is raised" do
-          expect(resource.x 'hi').to eq 'hi'
-          expect(resource.x).to eq 'hi'
+          expect(resource.x "hi").to eq "hi"
+          expect(resource.x).to eq "hi"
         end
-        it "when x is retrieved, no validation error is raised" do
-          expect(resource.x).to eq 1
+        it "when x is retrieved, it fails validation" do
+          expect { resource.x }.to raise_error Chef::Exceptions::ValidationFailed
           expect(Namer.current_index).to eq 1
         end
-        # it "when x is retrieved, a validation error is raised" do
-        #   expect { resource.x }.to raise_error Chef::Exceptions::ValidationFailed
-        #   expect(Namer.current_index).to eq 1
-        # end
       end
 
       with_property ":x, default: lazy { Namer.next_index.to_s }, is: proc { |v| Namer.next_index; true }" do
-        it "validation is not run at all on the default value" do
-          expect(resource.x).to eq '1'
-          expect(Namer.current_index).to eq 1
+        it "coercion and validation is only run the first time" do
+          expect(resource.x).to eq "1"
+          expect(Namer.current_index).to eq 2
+          expect(resource.x).to eq "1"
+          expect(Namer.current_index).to eq 2
         end
-        # it "validation is run each time" do
-        #   expect(resource.x).to eq '1'
-        #   expect(Namer.current_index).to eq 2
-        #   expect(resource.x).to eq '1'
-        #   expect(Namer.current_index).to eq 2
-        # end
       end
 
       with_property ":x, default: lazy { Namer.next_index.to_s.freeze }, is: proc { |v| Namer.next_index; true }" do
-        it "validation is not run at all on the default value" do
-          expect(resource.x).to eq '1'
-          expect(Namer.current_index).to eq 1
+        it "coercion and validation is run each time" do
+          expect(resource.x).to eq "1"
+          expect(Namer.current_index).to eq 2
+          expect(resource.x).to eq "3"
+          expect(Namer.current_index).to eq 4
         end
-        # it "validation is only run the first time" do
-        #   expect(resource.x).to eq '1'
-        #   expect(Namer.current_index).to eq 2
-        #   expect(resource.x).to eq '1'
-        #   expect(Namer.current_index).to eq 2
-        # end
       end
     end
 
@@ -650,13 +672,13 @@ describe "Chef::Resource.property" do
           expect(Namer.current_index).to eq 0
         end
         it "when x is set, coercion is run" do
-          expect(resource.x 'hi').to eq 'hi1'
-          expect(resource.x).to eq 'hi1'
+          expect(resource.x "hi").to eq "hi1"
+          expect(resource.x).to eq "hi1"
           expect(Namer.current_index).to eq 1
         end
         it "when x is retrieved, coercion is run exactly once" do
-          expect(resource.x).to eq '101'
-          expect(resource.x).to eq '101'
+          expect(resource.x).to eq "101"
+          expect(resource.x).to eq "101"
           expect(Namer.current_index).to eq 1
         end
       end
@@ -668,13 +690,13 @@ describe "Chef::Resource.property" do
           expect(Namer.current_index).to eq 0
         end
         it "when x is set, coercion is run" do
-          expect(resource.x 'hi').to eq 'hi1'
-          expect(resource.x).to eq 'hi1'
+          expect(resource.x "hi").to eq "hi1"
+          expect(resource.x).to eq "hi1"
           expect(Namer.current_index).to eq 1
         end
         it "when x is retrieved, coercion is run each time" do
-          expect(resource.x).to eq '101'
-          expect(resource.x).to eq '102'
+          expect(resource.x).to eq "101"
+          expect(resource.x).to eq "102"
           expect(Namer.current_index).to eq 2
         end
       end
@@ -686,13 +708,13 @@ describe "Chef::Resource.property" do
           expect(Namer.current_index).to eq 0
         end
         it "when x is set, coercion is run" do
-          expect(resource.x 'hi').to eq 'hi1'
-          expect(resource.x).to eq 'hi1'
+          expect(resource.x "hi").to eq "hi1"
+          expect(resource.x).to eq "hi1"
           expect(Namer.current_index).to eq 1
         end
         it "when x is retrieved, coercion is run exactly once" do
-          expect(resource.x).to eq '101'
-          expect(resource.x).to eq '101'
+          expect(resource.x).to eq "101"
+          expect(resource.x).to eq "101"
           expect(Namer.current_index).to eq 1
         end
       end
@@ -704,61 +726,55 @@ describe "Chef::Resource.property" do
           expect(Namer.current_index).to eq 0
         end
         it "when x is set, coercion is run" do
-          expect(resource.x 'hi').to eq 'hi1'
-          expect(resource.x).to eq 'hi1'
+          expect(resource.x "hi").to eq "hi1"
+          expect(resource.x).to eq "hi1"
           expect(Namer.current_index).to eq 1
         end
         it "when x is retrieved, coercion is run each time" do
-          expect(resource.x).to eq '101'
-          expect(resource.x).to eq '102'
+          expect(resource.x).to eq "101"
+          expect(resource.x).to eq "102"
           expect(Namer.current_index).to eq 2
         end
       end
 
       with_property ':x, proc { |v| Namer.next_index; true }, coerce: proc { |v| "#{v}#{next_index}" }, default: lazy { 10 }' do
-        it "coercion is only run the first time x is retrieved, and validation is not run" do
+        it "coercion and validation is only run the first time x is retrieved" do
           expect(Namer.current_index).to eq 0
-          expect(resource.x).to eq '101'
-          expect(Namer.current_index).to eq 1
-          expect(resource.x).to eq '101'
-          expect(Namer.current_index).to eq 1
+          expect(resource.x).to eq "101"
+          expect(Namer.current_index).to eq 2
+          expect(resource.x).to eq "101"
+          expect(Namer.current_index).to eq 2
         end
       end
 
       context "validation and coercion of defaults" do
         with_property ':x, String, coerce: proc { |v| "#{v}#{next_index}" }, default: 10' do
           it "when x is retrieved, it is coerced before validating and passes" do
-            expect(resource.x).to eq '101'
+            expect(resource.x).to eq "101"
           end
         end
         with_property ':x, Integer, coerce: proc { |v| "#{v}#{next_index}" }, default: 10' do
-          it "when x is retrieved, it is coerced and not validated" do
-            expect(resource.x).to eq '101'
+          it "when x is retrieved, it is coerced and fails validation" do
+            expect { resource.x }.to raise_error Chef::Exceptions::ValidationFailed
           end
-          # it "when x is retrieved, it is coerced before validating and fails" do
-          #   expect { resource.x }.to raise_error Chef::Exceptions::ValidationFailed
-          # end
         end
         with_property ':x, String, coerce: proc { |v| "#{v}#{next_index}" }, default: lazy { 10 }' do
           it "when x is retrieved, it is coerced before validating and passes" do
-            expect(resource.x).to eq '101'
+            expect(resource.x).to eq "101"
           end
         end
         with_property ':x, Integer, coerce: proc { |v| "#{v}#{next_index}" }, default: lazy { 10 }' do
-          it "when x is retrieved, it is coerced and not validated" do
-            expect(resource.x).to eq '101'
+          it "when x is retrieved, it is coerced and fails validation" do
+            expect { resource.x }.to raise_error Chef::Exceptions::ValidationFailed
           end
-          # it "when x is retrieved, it is coerced before validating and fails" do
-          #   expect { resource.x }.to raise_error Chef::Exceptions::ValidationFailed
-          # end
         end
         with_property ':x, proc { |v| Namer.next_index; true }, coerce: proc { |v| "#{v}#{next_index}" }, default: lazy { 10 }' do
-          it "coercion is only run the first time x is retrieved, and validation is not run" do
+          it "coercion is only run the first time x is retrieved, and validation is run" do
             expect(Namer.current_index).to eq 0
-            expect(resource.x).to eq '101'
-            expect(Namer.current_index).to eq 1
-            expect(resource.x).to eq '101'
-            expect(Namer.current_index).to eq 1
+            expect(resource.x).to eq "101"
+            expect(Namer.current_index).to eq 2
+            expect(resource.x).to eq "101"
+            expect(Namer.current_index).to eq 2
           end
         end
       end
@@ -766,7 +782,7 @@ describe "Chef::Resource.property" do
   end
 
   context "Chef::Resource#lazy" do
-    with_property ':x' do
+    with_property ":x" do
       it "setting x to a lazy value does not run it immediately" do
         resource.x lazy { Namer.next_index }
         expect(Namer.current_index).to eq 0
@@ -805,6 +821,7 @@ describe "Chef::Resource.property" do
             def self.blah
               "class"
             end
+
             def blah
               "#{name}#{Namer.next_index}"
             end
@@ -861,7 +878,7 @@ describe "Chef::Resource.property" do
       end
     end
 
-    with_property ':x, String' do
+    with_property ":x, String" do
       it "lazy values are not validated on set" do
         resource.x lazy { Namer.next_index }
         expect(Namer.current_index).to eq 0
@@ -873,7 +890,7 @@ describe "Chef::Resource.property" do
       end
     end
 
-    with_property ':x, is: proc { |v| Namer.next_index; true }' do
+    with_property ":x, is: proc { |v| Namer.next_index; true }" do
       it "lazy values are validated on each access" do
         resource.x lazy { Namer.next_index }
         expect(resource.x).to eq 1
@@ -922,7 +939,8 @@ describe "Chef::Resource.property" do
         expect(Namer.current_index).to eq 1
       end
       it "does not emit a deprecation warning if set to nil" do
-        expect(resource.x nil).to eq "1"
+        # nil is never coerced
+        expect(resource.x nil).to be_nil
       end
       it "coercion sets the value (and coercion does not run on get)" do
         expect(resource.x 10).to eq "101"
@@ -936,7 +954,7 @@ describe "Chef::Resource.property" do
         expect(Namer.current_index).to eq 2
       end
     end
-    with_property ':x, coerce: proc { |x| x }' do
+    with_property ":x, coerce: proc { |x| x }" do
       it "does not emit a deprecation warning if set to nil" do
         expect(resource.x nil).to be_nil
       end
@@ -946,19 +964,19 @@ describe "Chef::Resource.property" do
         resource.x 20
         expect(resource.x).to eq 20
         expect(Namer.current_index).to eq 2
-        expect { resource.x 10 }.to raise_error 'hi'
+        expect { resource.x 10 }.to raise_error "hi"
         expect(resource.x).to eq 20
         expect(Namer.current_index).to eq 3
       end
       it "validation does not run if coercion fails" do
-        expect { resource.x 10 }.to raise_error 'hi'
+        expect { resource.x 10 }.to raise_error "hi"
         expect(Namer.current_index).to eq 1
       end
     end
   end
 
   context "Chef::Resource::Property validation" do
-    with_property ':x, is: proc { |v| Namer.next_index; v.is_a?(Integer) }' do
+    with_property ":x, is: proc { |v| Namer.next_index; v.is_a?(Integer) }" do
       it "validation runs on set" do
         expect(resource.x 10).to eq 10
         expect(Namer.current_index).to eq 1
@@ -977,31 +995,31 @@ describe "Chef::Resource.property" do
       it "failed validation fails to set the value" do
         expect(resource.x 10).to eq 10
         expect(Namer.current_index).to eq 1
-        expect { resource.x 'blah' }.to raise_error Chef::Exceptions::ValidationFailed
+        expect { resource.x "blah" }.to raise_error Chef::Exceptions::ValidationFailed
         expect(resource.x).to eq 10
         expect(Namer.current_index).to eq 2
       end
     end
   end
 
-  [ 'name_attribute', 'name_property' ].each do |name|
+  %w{name_attribute name_property}.each do |name|
     context "Chef::Resource::Property##{name}" do
       with_property ":x, #{name}: true" do
         it "defaults x to resource.name" do
-          expect(resource.x).to eq 'blah'
+          expect(resource.x).to eq "blah"
         end
         it "does not pick up resource.name if set" do
           expect(resource.x 10).to eq 10
           expect(resource.x).to eq 10
         end
         it "binds to the latest resource.name when run" do
-          resource.name 'foo'
-          expect(resource.x).to eq 'foo'
+          resource.name "foo"
+          expect(resource.x).to eq "foo"
         end
         it "caches resource.name" do
-          expect(resource.x).to eq 'blah'
-          resource.name 'foo'
-          expect(resource.x).to eq 'blah'
+          expect(resource.x).to eq "blah"
+          resource.name "foo"
+          expect(resource.x).to eq "blah"
         end
       end
 
@@ -1018,86 +1036,125 @@ describe "Chef::Resource.property" do
       end
 
       context "default ordering deprecation warnings" do
-        it "emits a deprecation warning for property :x, default: 10, #{name}: true" do
-          expect { resource_class.property :x, :default => 10, name.to_sym => true }.to raise_error Chef::Exceptions::DeprecatedFeatureError,
-            /Cannot specify both default and name_property together on property x of resource chef_resource_property_spec_(\d+). Only one \(default\) will be obeyed./
+        it "emits an error for property :x, default: 10, #{name}: true" do
+          expect { resource_class.property :x, :default => 10, name.to_sym => true }.to raise_error ArgumentError,
+            /A property cannot be both a name_property\/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)/
         end
-        it "emits a deprecation warning for property :x, default: nil, #{name}: true" do
-          expect { resource_class.property :x, :default => nil, name.to_sym => true }.to raise_error Chef::Exceptions::DeprecatedFeatureError,
-            /Cannot specify both default and name_property together on property x of resource chef_resource_property_spec_(\d+). Only one \(name_property\) will be obeyed./
+        it "emits an error for property :x, default: nil, #{name}: true" do
+          expect { resource_class.property :x, :default => nil, name.to_sym => true }.to raise_error ArgumentError,
+            /A property cannot be both a name_property\/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)/
         end
-        it "emits a deprecation warning for property :x, #{name}: true, default: 10" do
-          expect { resource_class.property :x, name.to_sym => true, :default => 10 }.to raise_error Chef::Exceptions::DeprecatedFeatureError,
-            /Cannot specify both default and name_property together on property x of resource chef_resource_property_spec_(\d+). Only one \(name_property\) will be obeyed./
+        it "emits an error for property :x, #{name}: true, default: 10" do
+          expect { resource_class.property :x, name.to_sym => true, :default => 10 }.to raise_error ArgumentError,
+            /A property cannot be both a name_property\/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)/
         end
-        it "emits a deprecation warning for property :x, #{name}: true, default: nil" do
-          expect { resource_class.property :x, name.to_sym => true, :default => nil }.to raise_error Chef::Exceptions::DeprecatedFeatureError,
-            /Cannot specify both default and name_property together on property x of resource chef_resource_property_spec_(\d+). Only one \(name_property\) will be obeyed./
-        end
-      end
-
-      context "default ordering" do
-        before { Chef::Config[:treat_deprecation_warnings_as_errors] = false }
-        with_property ":x, default: 10, #{name}: true" do
-          it "chooses default over #{name}" do
-            expect(resource.x).to eq 10
-          end
-        end
-        with_property ":x, default: nil, #{name}: true" do
-          it "chooses #{name} over default" do
-            expect(resource.x).to eq 'blah'
-          end
-        end
-        with_property ":x, #{name}: true, default: 10" do
-          it "chooses #{name} over default" do
-            expect(resource.x).to eq 'blah'
-          end
-        end
-        with_property ":x, #{name}: true, default: nil" do
-          it "chooses #{name} over default" do
-            expect(resource.x).to eq 'blah'
-          end
+        it "emits an error for property :x, #{name}: true, default: nil" do
+          expect { resource_class.property :x, name.to_sym => true, :default => nil }.to raise_error ArgumentError,
+            /A property cannot be both a name_property\/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)/
         end
       end
-
-      context "default ordering when #{name} is nil" do
-        with_property ":x, #{name}: nil, default: 10" do
-          it "chooses default" do
-            expect(resource.x).to eq 10
-          end
-        end
-        with_property ":x, default: 10, #{name}: nil" do
-          it "chooses default" do
-            expect(resource.x).to eq 10
-          end
-        end
-      end
-
-      context "default ordering when #{name} is false" do
-        with_property ":x, #{name}: false, default: 10" do
-          it "chooses default" do
-            expect(resource.x).to eq 10
-          end
-        end
-        with_property ":x, default: 10, #{name}: nil" do
-          it "chooses default" do
-            expect(resource.x).to eq 10
-          end
-        end
-      end
-
     end
   end
 
   it "raises an error if both name_property and name_attribute are specified" do
     expect { resource_class.property :x, :name_property => false, :name_attribute => 1 }.to raise_error ArgumentError,
-      /Cannot specify both name_property and name_attribute together on property x of resource chef_resource_property_spec_(\d+)./
+      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)./
     expect { resource_class.property :x, :name_property => false, :name_attribute => nil }.to raise_error ArgumentError,
-      /Cannot specify both name_property and name_attribute together on property x of resource chef_resource_property_spec_(\d+)./
+      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)./
     expect { resource_class.property :x, :name_property => false, :name_attribute => false }.to raise_error ArgumentError,
-      /Cannot specify both name_property and name_attribute together on property x of resource chef_resource_property_spec_(\d+)./
+      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)./
     expect { resource_class.property :x, :name_property => true, :name_attribute => true }.to raise_error ArgumentError,
-      /Cannot specify both name_property and name_attribute together on property x of resource chef_resource_property_spec_(\d+)./
+      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)./
+  end
+
+  context "property_type" do
+    it "property_types validate their defaults" do
+      expect do
+        module ::PropertySpecPropertyTypes
+          include Chef::Mixin::Properties
+          property_type(is: [:a, :b], default: :c)
+        end
+      end.to raise_error(Chef::Exceptions::ValidationFailed)
+      expect do
+        module ::PropertySpecPropertyTypes
+          include Chef::Mixin::Properties
+          property_type(is: [:a, :b], default: :b)
+        end
+      end.not_to raise_error
+    end
+
+    context "With property_type ABType (is: [:a, :b]) and CDType (is: [:c, :d])" do
+      before :all do
+        module ::PropertySpecPropertyTypes
+          include Chef::Mixin::Properties
+          ABType = property_type(is: [:a, :b])
+          CDType = property_type(is: [:c, :d])
+        end
+      end
+
+      with_property ":x, [PropertySpecPropertyTypes::ABType, nil, PropertySpecPropertyTypes::CDType]" do
+        it "The property can be set to nil without triggering a warning" do
+          expect(resource.x nil).to be_nil
+          expect(resource.x).to be_nil
+        end
+        it "The property can be set to :a" do
+          expect(resource.x :a).to eq(:a)
+          expect(resource.x).to eq(:a)
+        end
+        it "The property can be set to :c" do
+          expect(resource.x :c).to eq(:c)
+          expect(resource.x).to eq(:c)
+        end
+        it "The property cannot be set to :z" do
+          expect { resource.x :z }.to raise_error(Chef::Exceptions::ValidationFailed, /Property x must be one of/)
+        end
+      end
+
+      with_property ":x, [nil, PropertySpecPropertyTypes::ABType, PropertySpecPropertyTypes::CDType]" do
+        it "The property can be set to nil without triggering a warning" do
+          expect(resource.x nil).to be_nil
+          expect(resource.x).to be_nil
+        end
+        it "The property can be set to :a" do
+          expect(resource.x :a).to eq(:a)
+          expect(resource.x).to eq(:a)
+        end
+        it "The property can be set to :c" do
+          expect(resource.x :c).to eq(:c)
+          expect(resource.x).to eq(:c)
+        end
+        it "The property cannot be set to :z" do
+          expect { resource.x :z }.to raise_error(Chef::Exceptions::ValidationFailed, /Property x must be one of/)
+        end
+      end
+
+      with_property ":x, [PropertySpecPropertyTypes::ABType, nil], default: nil" do
+        it "The value defaults to nil" do
+          expect(resource.x).to be_nil
+        end
+      end
+
+      with_property ":x, [PropertySpecPropertyTypes::ABType, nil], default: lazy { nil }" do
+        it "The value defaults to nil" do
+          expect(resource.x).to be_nil
+        end
+      end
+    end
+
+  end
+
+  context "redefining Object methods" do
+    it "disallows redefining Object methods" do
+      expect { resource_class.class_eval { property :hash } }.to raise_error(ArgumentError)
+    end
+
+    it "disallows redefining Chef::Resource methods" do
+      expect { resource_class.class_eval { property :action } }.to raise_error(ArgumentError)
+    end
+
+    it "allows redefining properties on Chef::Resource" do
+      expect { resource_class.class_eval { property :sensitive } }.not_to raise_error
+    end
   end
 
   context "with a custom property type" do
@@ -1117,7 +1174,7 @@ describe "Chef::Resource.property" do
           end
         end
         let(:subresource) do
-          subresource_class.new('blah')
+          subresource_class.new("blah")
         end
 
         context "with property :x, default: 10 on the subclass" do

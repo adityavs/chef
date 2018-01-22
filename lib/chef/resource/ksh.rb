@@ -1,6 +1,6 @@
 #
 # Author:: Nolan Davidson (<nolan.davidson@gmail.com>)
-# Copyright:: Copyright (c) 2015 Chef Software, Inc.
+# Copyright:: Copyright 2015-2016, Chef Software, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,19 @@
 # limitations under the License.
 #
 
-require 'chef/resource/script'
+require "chef/resource/script"
 
 class Chef
   class Resource
+    # Use the ksh resource to execute scripts using the Korn shell (ksh) interpreter. This resource may also use any
+    # f the actions and properties that are available to the execute resource. Commands that are executed with this
+    # resource are (by their nature) not idempotent, as they are typically unique to the environment in which they are
+    # run. Use not_if and only_if to guard this resource for idempotence.
+    #
+    # @since 12.6
     class Ksh < Chef::Resource::Script
 
-      def initialize(name, run_context=nil)
+      def initialize(name, run_context = nil)
         super
         @interpreter = "ksh"
       end

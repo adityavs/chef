@@ -1,7 +1,7 @@
 #
-# Author:: Adam Jacob (<adam@opscode.com>)
-# Author:: Tyler Cloke (<tyler@opscode.com>)
-# Copyright:: Copyright (c) 2008 Opscode, Inc.
+# Author:: Adam Jacob (<adam@chef.io>)
+# Author:: Tyler Cloke (<tyler@chef.io>)
+# Copyright:: Copyright 2008-2016, Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,26 +17,28 @@
 # limitations under the License.
 #
 
-require 'chef/resource'
-require 'chef/provider/http_request'
+require "chef/resource"
+require "chef/provider/http_request"
 
 class Chef
   class Resource
+    # Use the http_request resource to send an HTTP request (GET, PUT, POST, DELETE, HEAD, or OPTIONS) with an arbitrary
+    # message. This resource is often useful when custom callbacks are necessary.
     class HttpRequest < Chef::Resource
 
       identity_attr :url
 
       default_action :get
-      allowed_actions :get, :put, :post, :delete, :head, :options
+      allowed_actions :get, :patch, :put, :post, :delete, :head, :options
 
-      def initialize(name, run_context=nil)
+      def initialize(name, run_context = nil)
         super
         @message = name
         @url = nil
         @headers = {}
       end
 
-      def url(args=nil)
+      def url(args = nil)
         set_or_return(
           :url,
           args,
@@ -44,7 +46,7 @@ class Chef
         )
       end
 
-      def message(args=nil, &block)
+      def message(args = nil, &block)
         args = block if block_given?
         set_or_return(
           :message,
@@ -53,7 +55,7 @@ class Chef
         )
       end
 
-      def headers(args=nil)
+      def headers(args = nil)
         set_or_return(
           :headers,
           args,

@@ -1,6 +1,6 @@
 #
 # Author:: John Hampton (<john@cleanoffer.com>)
-# Copyright:: Copyright (c) 2009 CleanOffer, Inc.
+# Copyright:: Copyright 2009-2016, CleanOffer, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,15 +19,14 @@
 class Chef
   class Resource
     class OneTwoThreeFour < Chef::Resource
-
-      attr_reader :i_can_count
+      provides :one_two_three_four
 
       def i_can_count(tf)
         @i_can_count = tf
       end
 
-      def something(arg=nil)
-        if arg == true or arg == false
+      def something(arg = nil)
+        if arg == true || arg == false
           @something = arg
         end
         @something

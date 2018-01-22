@@ -1,6 +1,6 @@
 #
 # Author:: AJ Christensen (<aj@hjksolutions.com>)
-# Copyright:: Copyright (c) 2008 HJK Solutions, LLC
+# Copyright:: Copyright 2008-2016, HJK Solutions, LLC
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,12 +16,12 @@
 # limitations under the License.
 #
 
-require 'spec_helper'
+require "spec_helper"
 
 describe Chef::Provider::Service::Debian do
   before(:each) do
     @node = Chef::Node.new
-    @node.automatic_attrs[:command] = {:ps => 'fuuuu'}
+    @node.automatic_attrs[:command] = { :ps => "fuuuu" }
     @events = Chef::EventDispatch::Dispatcher.new
     @run_context = Chef::RunContext.new(@node, {}, @events)
 
@@ -39,9 +39,9 @@ describe Chef::Provider::Service::Debian do
       expect(File).to receive(:exists?).with("/usr/sbin/update-rc.d") .and_return(false)
 
       @provider.define_resource_requirements
-      expect {
+      expect do
         @provider.process_resource_requirements
-      }.to raise_error(Chef::Exceptions::Service)
+      end.to raise_error(Chef::Exceptions::Service)
     end
 
     context "when update-rc.d shows init linked to rc*.d/" do
@@ -59,11 +59,10 @@ describe Chef::Provider::Service::Debian do
     /etc/rc6.d/K20chef
         UPDATE_RC_D_SUCCESS
 
-        @stdout = StringIO.new(result)
-        @stderr = StringIO.new
-        @status = double("Status", :exitstatus => 0, :stdout => @stdout)
+        @stdout = result
+        @stderr = ""
+        @status = double("Status", :exitstatus => 0, :stdout => @stdout, :stderr => @stderr)
         allow(@provider).to receive(:shell_out!).and_return(@status)
-        allow(@provider).to receive(:popen4).and_yield(@pid, @stdin, @stdout, @stderr).and_return(@status)
       end
 
       it "says the service is enabled" do
@@ -80,13 +79,9 @@ describe Chef::Provider::Service::Debian do
     context "when update-rc.d shows init isn't linked to rc*.d/" do
       before do
         allow(@provider).to receive(:assert_update_rcd_available)
-        @status = double("Status", :exitstatus => 0)
-        @stdout = StringIO.new(
-          " Removing any system startup links for /etc/init.d/chef ...")
-        @stderr = StringIO.new
-        @status = double("Status", :exitstatus => 0, :stdout => @stdout)
+        @stdout = " Removing any system startup links for /etc/init.d/chef ..."
+        @status = double("Status", :exitstatus => 0, :stdout => @stdout, stderr: "")
         allow(@provider).to receive(:shell_out!).and_return(@status)
-        allow(@provider).to receive(:popen4).and_yield(@pid, @stdin, @stdout, @stderr).and_return(@status)
       end
 
       it "says the service is disabled" do
@@ -102,19 +97,20 @@ describe Chef::Provider::Service::Debian do
 
     context "when update-rc.d fails" do
       before do
-        @status = double("Status", :exitstatus => -1)
-        allow(@provider).to receive(:popen4).and_return(@status)
+        @status = double("Status", exitstatus: -1, stdout: "", stderr: "")
+        allow(@provider).to receive(:shell_out!).and_return(@status)
       end
 
       it "raises an error" do
+        @provider.load_current_resource
         @provider.define_resource_requirements
-        expect {
+        expect do
           @provider.process_resource_requirements
-        }.to raise_error(Chef::Exceptions::Service)
+        end.to raise_error(Chef::Exceptions::Service)
       end
     end
 
-    {"Debian/Lenny and older" => {
+    { "Debian/Lenny and older" => {
         "linked" => {
           "stdout" => <<-STDOUT,
  Removing any system startup links for /etc/init.d/chef ...
@@ -128,18 +124,18 @@ describe Chef::Provider::Service::Debian do
           STDOUT
           "stderr" => "",
           "priorities" => {
-            "0"=>[:stop, "20"],
-            "1"=>[:stop, "20"],
-            "2"=>[:start, "20"],
-            "3"=>[:start, "20"],
-            "4"=>[:start, "20"],
-            "5"=>[:start, "20"],
-            "6"=>[:stop, "20"]
-          }
+            "0" => [:stop, "20"],
+            "1" => [:stop, "20"],
+            "2" => [:start, "20"],
+            "3" => [:start, "20"],
+            "4" => [:start, "20"],
+            "5" => [:start, "20"],
+            "6" => [:stop, "20"],
+          },
         },
         "not linked" => {
           "stdout" => " Removing any system startup links for /etc/init.d/chef ...",
-          "stderr" => ""
+          "stderr" => "",
         },
       },
       "Debian/Squeeze and earlier" => {
@@ -156,19 +152,19 @@ insserv: remove service /etc/init.d/../rc0.d/K20chef-client
   insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
           STDERR
           "priorities" => {
-            "0"=>[:stop, "20"],
-            "1"=>[:stop, "20"],
-            "2"=>[:start, "20"],
-            "3"=>[:start, "20"],
-            "4"=>[:start, "20"],
-            "5"=>[:start, "20"],
-            "6"=>[:stop, "20"]
-          }
+            "0" => [:stop, "20"],
+            "1" => [:stop, "20"],
+            "2" => [:start, "20"],
+            "3" => [:start, "20"],
+            "4" => [:start, "20"],
+            "5" => [:start, "20"],
+            "6" => [:stop, "20"],
+          },
         },
         "not linked" => {
           "stdout" => "update-rc.d: using dependency based boot sequencing",
-          "stderr" => ""
-        }
+          "stderr" => "",
+        },
       },
       "Debian/Wheezy and earlier, a service only starting at run level S" => {
         "linked" => {
@@ -181,28 +177,27 @@ insserv: remove service /etc/init.d/../rcS.d/S13rpcbind
 insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
           STDERR
           "priorities" => {
-            "0"=>[:stop, "06"],
-            "1"=>[:stop, "06"],
-            "6"=>[:stop, "06"],
-            "S"=>[:start, "13"]
-          }
+            "0" => [:stop, "06"],
+            "1" => [:stop, "06"],
+            "6" => [:stop, "06"],
+            "S" => [:start, "13"],
+          },
         },
         "not linked" => {
           "stdout" => "",
-          "stderr" => "insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop"
-        }
-      }
+          "stderr" => "insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop",
+        },
+      },
     }.each do |model, expected_results|
       context "on #{model}" do
         context "when update-rc.d shows init linked to rc*.d/" do
           before do
             allow(@provider).to receive(:assert_update_rcd_available)
 
-            @stdout = StringIO.new(expected_results["linked"]["stdout"])
-            @stderr = StringIO.new(expected_results["linked"]["stderr"])
-            @status = double("Status", :exitstatus => 0, :stdout => @stdout)
+            @stdout = expected_results["linked"]["stdout"]
+            @stderr = expected_results["linked"]["stderr"]
+            @status = double("Status", exitstatus: 0, stdout: @stdout, stderr: @stderr)
             allow(@provider).to receive(:shell_out!).and_return(@status)
-            allow(@provider).to receive(:popen4).and_yield(@pid, @stdin, @stdout, @stderr).and_return(@status)
           end
 
           it "says the service is enabled" do
@@ -224,11 +219,10 @@ insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
         context "when update-rc.d shows init isn't linked to rc*.d/" do
           before do
             allow(@provider).to receive(:assert_update_rcd_available)
-            @stdout = StringIO.new(expected_results["not linked"]["stdout"])
-            @stderr = StringIO.new(expected_results["not linked"]["stderr"])
-            @status = double("Status", :exitstatus => 0, :stdout => @stdout)
+            @stdout = expected_results["not linked"]["stdout"]
+            @stderr = expected_results["not linked"]["stderr"]
+            @status = double("Status", exitstatus: 0, stdout: @stdout, stderr: @stderr)
             allow(@provider).to receive(:shell_out!).and_return(@status)
-            allow(@provider).to receive(:popen4).and_yield(@pid, @stdin, @stdout, @stderr).and_return(@status)
           end
 
           it "says the service is disabled" do
@@ -276,7 +270,7 @@ insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
     context "when the service is enabled" do
       before do
         @current_resource.enabled(true)
-	@current_resource.priority(80)
+        @current_resource.priority(80)
       end
 
       context "and the service sets no priority" do
@@ -311,7 +305,7 @@ insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
       it "calls update-rc.d 'service_name' defaults" do
         expect_commands(@provider, [
           "/usr/sbin/update-rc.d -f #{service_name} remove",
-          "/usr/sbin/update-rc.d #{service_name} defaults"
+          "/usr/sbin/update-rc.d #{service_name} defaults",
         ])
         @provider.enable_service
       end
@@ -325,7 +319,7 @@ insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
       it "calls update-rc.d 'service_name' defaults" do
         expect_commands(@provider, [
           "/usr/sbin/update-rc.d -f #{service_name} remove",
-          "/usr/sbin/update-rc.d #{service_name} defaults 75 25"
+          "/usr/sbin/update-rc.d #{service_name} defaults 75 25",
         ])
         @provider.enable_service
       end
@@ -339,7 +333,7 @@ insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
       it "calls update-rc.d 'service_name' with those priorities" do
         expect_commands(@provider, [
           "/usr/sbin/update-rc.d -f #{service_name} remove",
-          "/usr/sbin/update-rc.d #{service_name} start 20 2 . stop 55 3 . "
+          "/usr/sbin/update-rc.d #{service_name} start 20 2 . stop 55 3 . ",
         ])
         @provider.enable_service
       end
@@ -352,7 +346,7 @@ insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
       it "calls update-rc.d -f 'service_name' remove + stop with default priority" do
         expect_commands(@provider, [
           "/usr/sbin/update-rc.d -f #{service_name} remove",
-          "/usr/sbin/update-rc.d -f #{service_name} stop 80 2 3 4 5 ."
+          "/usr/sbin/update-rc.d -f #{service_name} stop 80 2 3 4 5 .",
         ])
         @provider.disable_service
       end
@@ -366,7 +360,7 @@ insserv: dryrun, not creating .depend.boot, .depend.start, and .depend.stop
       it "calls update-rc.d -f 'service_name' remove + stop with the specified priority" do
         expect_commands(@provider, [
           "/usr/sbin/update-rc.d -f #{service_name} remove",
-          "/usr/sbin/update-rc.d -f #{service_name} stop #{100 - @new_resource.priority} 2 3 4 5 ."
+          "/usr/sbin/update-rc.d -f #{service_name} stop #{100 - @new_resource.priority} 2 3 4 5 .",
         ])
         @provider.disable_service
       end
